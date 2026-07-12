@@ -191,6 +191,31 @@ describe('FormulaGenerator свойства сигнала', () => {
     expect(max).toBeGreaterThan(min * 3); // накат заметно громче затишья
   });
 
+  it('risset: колокол звенит, затухает и переударяет через период', () => {
+    const gen = new FormulaGenerator('risset', SR, { gain: 1, rissF0: 480, rissDecay: 1, rissPeriod: 2 });
+    const peak = (buf: Float32Array) => Math.max(...Array.from(buf, Math.abs));
+    const strike = new Float32Array(SR / 2); // 0–0.5 c — звон
+    gen.fill(strike);
+    const tail = new Float32Array(SR); // 0.5–1.5 c — хвост
+    gen.fill(tail);
+    const restrike = new Float32Array(SR); // 1.5–2.5 c — сюда попадает новый удар (t=2)
+    gen.fill(restrike);
+    expect(peak(tail)).toBeLessThan(peak(strike)); // затухает
+    expect(peak(restrike)).toBeGreaterThan(peak(tail) * 1.5); // новый удар громче хвоста
+  });
+
+  it('rain: капли редкие, но слышны; сигнал ограничен', () => {
+    const gen = new FormulaGenerator('rain', SR, { gain: 1, rainDensity: 6, rainPitch: 900, rainBed: 0 }, mulberry32(13));
+    const buf = new Float32Array(SR); // 1 c, подложка выключена → только капли
+    gen.fill(buf);
+    const peak = Math.max(...Array.from(buf, Math.abs));
+    expect(peak).toBeGreaterThan(0.05); // капли слышны
+    expect(peak).toBeLessThanOrEqual(1.0);
+    // капли имеют длительность (затухающий резонанс), а не одиночные сэмплы
+    const active = Array.from(buf).filter((v) => Math.abs(v) > 0.02).length;
+    expect(active).toBeGreaterThan(100);
+  });
+
   it('DEFAULT_PARAMS покрывает все ключи слайдеров', () => {
     for (const def of FORMULAS) {
       for (const s of def.sliders) {

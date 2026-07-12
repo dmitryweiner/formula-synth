@@ -26,12 +26,13 @@ npm run shot -- [--mobile] [--fx] [--preset N] [--preview] [--help-shot]
 ## Карта модулей
 
 ```
-src/dsp/generator.ts   ЯДРО: FormulaGenerator — все 19 формул посэмплово,
+src/dsp/generator.ts   ЯДРО: FormulaGenerator — все 21 формулу посэмплово,
                        switch по FormulaId; RNG инъецируется (Rng), в тестах
                        mulberry32, в воркалете Math.random. Общий пул
                        DEFAULT_PARAMS на все формулы (как в оригинале).
                        Свои сверх оригинала: bytebeat, bell (FM-колокол),
-                       ocean (шум сквозь «дышащий» LP)
+                       ocean (шум сквозь «дышащий» LP), risset (аддитивный
+                       колокол Риссе), rain (резонансные капли + шумовая подложка)
 src/dsp/gate.ts        гейт генератора: фейд до тишины, затем воркалет НЕ
                        считает семплы (perf); чистая логика, тестируется
 src/dsp/mod.ts         матрица модуляции (чистая): типы ModState/LfoDef/
@@ -80,8 +81,10 @@ scripts/shot.mjs       playwright-скриншоты + аудио-смоук
 - **DSP отделён от Web Audio**: generator.ts не знает про AudioWorklet —
   его импортируют и воркалет, и vitest. Всю математику менять только тут
   и только с перегенерацией golden (звук — «текущее состояние кода»).
-- **Формул 19**: 16 портированы из formulas-audio-lab (`am` и `bitcrush` из
-  старого README там уже отсутствовали) + 3 новых: bytebeat, bell, ocean.
+- **Формул 21**: 16 портированы из formulas-audio-lab (`am` и `bitcrush` из
+  старого README там уже отсутствовали) + 5 своих: bytebeat, bell, ocean,
+  risset (аддитивный колокол Риссе, 11 партиалов), rain (капли: редкие
+  резонансные «плинки» с восходящим глиссандо + мягкая шумовая подложка).
 - **Выключенный генератор перестаёт считаться** (src/dsp/gate.ts + сообщение
   `enabled` в воркалет): фейд до нуля за 5 блоков, потом process() выходит
   сразу. Нюанс: выключенная формула «замирает» на месте, а не идёт фоном —
@@ -116,10 +119,14 @@ scripts/shot.mjs       playwright-скриншоты + аудио-смоук
   (≥720px, каждая карточка — бокс). Reset — маленькая ↺ в шапке карточки.
   Компактный топбар: [Play/Rec/📊/🎛] и [пресеты/Save/Share].
 - Выключенные генераторы не считаются (gate.ts, см. выше).
-- Добавлены bytebeat / bell / ocean.
+- Добавлены bytebeat / bell / ocean / risset / rain.
 - Матрица модуляции (топбар: ∿) — панель Modulators + таблица маршрутов;
-  индикатор ∿ на «живых» слайдерах. Демо-пресеты: «Tidal drift (mod)»,
-  «Generative bells (S&H)». Полный план — MODULATION.md.
+  индикатор ∿ на «живых» слайдерах. Демо-пресеты с LFO: «Tidal drift (mod)»,
+  «Generative bells (S&H)», «Aurora pad (mod)», «Wandering Lorenz (mod)»,
+  «Cathedral bells (Risset)», «Cave drips (mod)». Полный план — MODULATION.md.
+- Встроенный пресет можно открыть по query-параметру `?preset=<имя|номер>`
+  (имя точно/без регистра или 1-based индекс). При наличии `#s=`-токена
+  приоритет у него. Логика — findBuiltinPreset в main.ts.
 
 ## Бэклог
 

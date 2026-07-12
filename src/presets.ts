@@ -185,4 +185,124 @@ export const PRESETS: Preset[] = [
       },
     },
   },
+  {
+    // Пышный аддитивный пад: медленный дрейф основного тона (в октавах) +
+    // «дыхание» гармонической анимации (move) и плавно гуляющее число гармоник.
+    name: 'Aurora pad (mod)',
+    state: {
+      v: 3,
+      masterGain: 0.42,
+      fx: {
+        ...DEFAULT_FX,
+        filterOn: true, filterType: 'lowpass', filterFreq: 1800, filterQ: 0.7,
+        chorusOn: true, chorusMode: 'chorus', chorusRate: 0.08, chorusDepth: 8, chorusMix: 0.4, chorusFb: 0.3,
+        reverbOn: true, reverbDecay: 4.5, reverbMix: 0.48,
+        limiterOn: true,
+      },
+      formulas: {
+        additive: { enabled: true, params: { gain: 0.2, fund: 82, N: 16, move: 0.3 } },
+      },
+      mod: {
+        lfos: [
+          { shape: 'sine', rate: 0.04, phase: 0 },
+          { shape: 'sine', rate: 0.11, phase: 0.3 },
+          { shape: 'triangle', rate: 0.07, phase: 0 },
+        ],
+        routes: [
+          { src: 0, formula: 'additive', param: 'fund', depth: 0.12, exp: true },
+          { src: 1, formula: 'additive', param: 'move', depth: 0.5 },
+          { src: 2, formula: 'additive', param: 'N', depth: 0.3 },
+        ],
+      },
+    },
+  },
+  {
+    // Хаос Лоренца, чей центр высоты медленно дрейфует (в октавах), а размах
+    // частоты «дышит» вторым LFO — генеративная текстура, которая никогда не
+    // повторяется, но остаётся тональной.
+    name: 'Wandering Lorenz (mod)',
+    state: {
+      v: 3,
+      masterGain: 0.4,
+      fx: {
+        ...DEFAULT_FX,
+        filterOn: true, filterType: 'lowpass', filterFreq: 1600, filterQ: 0.9,
+        reverbOn: true, reverbDecay: 4, reverbMix: 0.42,
+        delayOn: true, delayTime: 0.45, delayFb: 0.3, delayMix: 0.25,
+        limiterOn: true,
+      },
+      formulas: {
+        lorenz: { enabled: true, params: { gain: 0.14, sigma: 10, rho: 28, beta: 2.6667, lBase: 120, lFreqScale: 40, lAmp: 0.25 } },
+      },
+      mod: {
+        lfos: [
+          { shape: 'sine', rate: 0.035, phase: 0 },
+          { shape: 'sine', rate: 0.09, phase: 0.5 },
+          { shape: 'triangle', rate: 0.06, phase: 0 },
+        ],
+        routes: [
+          { src: 0, formula: 'lorenz', param: 'lBase', depth: 0.18, exp: true },
+          { src: 1, formula: 'lorenz', param: 'lFreqScale', depth: 0.5 },
+        ],
+      },
+    },
+  },
+  {
+    // Аддитивный колокол Риссе в большом реверберберационном пространстве;
+    // медленный LFO уводит высоту звона в октавах — «соборные» колокола.
+    name: 'Cathedral bells (Risset)',
+    state: {
+      v: 3,
+      masterGain: 0.45,
+      fx: {
+        ...DEFAULT_FX,
+        reverbOn: true, reverbDecay: 6, reverbMix: 0.5,
+        delayOn: true, delayTime: 0.6, delayFb: 0.3, delayMix: 0.25,
+        limiterOn: true,
+      },
+      formulas: {
+        risset: { enabled: true, params: { gain: 0.42, rissF0: 360, rissDecay: 6, rissPeriod: 5 } },
+      },
+      mod: {
+        lfos: [
+          { shape: 'sine', rate: 0.03, phase: 0 },
+          { shape: 'sine', rate: 0.08, phase: 0.3 },
+          { shape: 'triangle', rate: 0.05, phase: 0 },
+        ],
+        routes: [
+          { src: 0, formula: 'risset', param: 'rissF0', depth: 0.15, exp: true },
+        ],
+      },
+    },
+  },
+  {
+    // Капли в гулкой пещере: редкие резонансные «плинки», чья частота и
+    // плотность медленно гуляют двумя LFO (как накаты у Ocean).
+    name: 'Cave drips (mod)',
+    state: {
+      v: 3,
+      masterGain: 0.5,
+      fx: {
+        ...DEFAULT_FX,
+        filterOn: true, filterType: 'lowpass', filterFreq: 2400, filterQ: 0.7,
+        reverbOn: true, reverbDecay: 5, reverbMix: 0.55,
+        delayOn: true, delayTime: 0.5, delayFb: 0.4, delayMix: 0.3,
+        limiterOn: true,
+      },
+      formulas: {
+        rain: { enabled: true, params: { gain: 0.4, rainDensity: 3, rainPitch: 1100, rainBed: 0.1 } },
+      },
+      mod: {
+        lfos: [
+          { shape: 'sine', rate: 0.05, phase: 0 },
+          { shape: 'triangle', rate: 0.03, phase: 0 },
+          { shape: 'sine', rate: 0.09, phase: 0.4 },
+        ],
+        routes: [
+          { src: 0, formula: 'rain', param: 'rainDensity', depth: 0.3 },
+          { src: 1, formula: 'rain', param: 'rainPitch', depth: 0.3, exp: true },
+        ],
+      },
+    },
+  },
 ];

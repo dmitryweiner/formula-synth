@@ -70,6 +70,13 @@ export const FORMULAS: FormulaDef[] = [
       { k: 'bellDecay', name: 'Decay (s)', min: 0.5, max: 8, step: 0.1, value: 3 },
       { k: 'bellPeriod', name: 'Strike every (s)', min: 1, max: 20, step: 0.5, value: 6 },
     ] },
+  { id: 'risset', title: 'Risset Bell', tag: 'Bell', desc: 'additive bell — 11 inharmonic partials (Risset, 1969)', hasReset: true,
+    sliders: [
+      { k: 'gain', name: 'Gain', min: 0, max: 1, step: 0.001, value: 0.4 },
+      { k: 'rissF0', name: 'f0 (Hz)', min: 100, max: 1200, step: 1, value: 480 },
+      { k: 'rissDecay', name: 'Decay (s)', min: 0.5, max: 12, step: 0.1, value: 5 },
+      { k: 'rissPeriod', name: 'Strike every (s)', min: 1, max: 20, step: 0.5, value: 6 },
+    ] },
   { id: 'fm', title: 'FM Sine', tag: 'FM', desc: 'sin(2π f_c t + I sin(2π f_m t))',
     sliders: [
       { k: 'gain', name: 'Gain', min: 0, max: 1, step: 0.001, value: 0.15 },
@@ -129,6 +136,13 @@ export const FORMULAS: FormulaDef[] = [
       { k: 'oceanRate', name: 'Wave rate (Hz)', min: 0.03, max: 0.5, step: 0.001, value: 0.12 },
       { k: 'oceanCut', name: 'Cutoff (Hz)', min: 100, max: 2000, step: 1, value: 600 },
       { k: 'oceanDepth', name: 'Swell depth', min: 0, max: 1, step: 0.01, value: 0.7 },
+    ] },
+  { id: 'rain', title: 'Rain / Drops', tag: 'Noise', desc: 'sparse resonant water drops over a soft noise bed', hasReset: true,
+    sliders: [
+      { k: 'gain', name: 'Gain', min: 0, max: 1, step: 0.001, value: 0.35 },
+      { k: 'rainDensity', name: 'Drops/s', min: 0.5, max: 20, step: 0.1, value: 4 },
+      { k: 'rainPitch', name: 'Drop pitch (Hz)', min: 200, max: 3000, step: 1, value: 900 },
+      { k: 'rainBed', name: 'Bed level', min: 0, max: 1, step: 0.01, value: 0.15 },
     ] },
   { id: 'noiselp', title: 'Noise → Low-pass', tag: 'Noise', desc: 'white noise → 1-pole LP',
     sliders: [

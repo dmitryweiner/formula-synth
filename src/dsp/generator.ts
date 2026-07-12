@@ -9,12 +9,12 @@ import { lfoValue, effectiveParam } from './mod';
 export type FormulaId =
   | 'fm' | 'logistic' | 'gliss' | 'additive' | 'pm' | 'beats' | 'dist' | 'quasi'
   | 'lorenz' | 'karplus' | 'noiselp' | 'pinknoise' | 'brownnoise' | 'velvetnoise'
-  | 'rossler' | 'shepard' | 'bytebeat' | 'bell' | 'ocean';
+  | 'rossler' | 'shepard' | 'bytebeat' | 'bell' | 'ocean' | 'risset' | 'rain';
 
 export const FORMULA_IDS: readonly FormulaId[] = [
   'fm', 'logistic', 'gliss', 'additive', 'pm', 'beats', 'dist', 'quasi',
   'lorenz', 'karplus', 'noiselp', 'pinknoise', 'brownnoise', 'velvetnoise',
-  'rossler', 'shepard', 'bytebeat', 'bell', 'ocean',
+  'rossler', 'shepard', 'bytebeat', 'bell', 'ocean', 'risset', 'rain',
 ];
 
 const FORMULA_ID_SET: ReadonlySet<string> = new Set(FORMULA_IDS);
@@ -49,6 +49,8 @@ export const DEFAULT_PARAMS: Readonly<Params> = {
   bbRecipe: 1, bbRate: 8000,
   bellF0: 320, bellRatio: 1.4, bellIndex: 4, bellDecay: 3, bellPeriod: 6,
   oceanRate: 0.12, oceanCut: 600, oceanDepth: 0.7,
+  rissF0: 480, rissDecay: 5, rissPeriod: 6,
+  rainDensity: 4, rainPitch: 900, rainBed: 0.15,
 };
 
 // Классические bytebeat-рецепты: целочисленное t, результат берётся по
@@ -60,6 +62,15 @@ const BYTEBEAT_RECIPES: readonly ((t: number) => number)[] = [
   (t) => t * 5 & (t >> 7) | t * 3 & (t * 4 >> 10),
   (t) => (t >> 7 | t | t >> 6) * 10 + 4 * (t & t >> 13 | t >> 6),
 ];
+
+// Классический колокол Жана-Клода Риссе (1969): 11 негармонических компонент
+// с индивидуальными амплитудами и временами затухания; две расстроенные пары
+// (0.56/0.56+1 Гц и 0.92/0.92+1.7 Гц) дают характерные биения.
+const RISSET_RATIO: readonly number[] = [0.56, 0.56, 0.92, 0.92, 1.19, 1.70, 2.00, 2.74, 3.00, 3.76, 4.07];
+const RISSET_AMP: readonly number[] = [1, 0.67, 1, 1.8, 2.67, 1.67, 1.46, 1.33, 1.33, 1, 1.33];
+const RISSET_DET: readonly number[] = [0, 1, 0, 1.7, 0, 0, 0, 0, 0, 0, 0]; // добавка в Гц
+const RISSET_DUR: readonly number[] = [1, 0.9, 0.65, 0.55, 0.325, 0.35, 0.25, 0.2, 0.15, 0.1, 0.075];
+const RISSET_AMP_SUM = RISSET_AMP.reduce((s, a) => s + a, 0);
 
 const TWO_PI = 2 * Math.PI;
 
@@ -101,6 +112,15 @@ export class FormulaGenerator {
   private bbT = 0;
   private bellT = 0;
   private oceanLp = 0;
+
+  private rissT = 0;
+  private rainLp = 0;
+  private dropT = 1e9; // время от начала текущей капли (большое = капли нет)
+  private dropPhase = 0;
+  private dropFreq = 0;
+  private dropAmp = 0;
+  private rainCounter = 0;
+  private rainNext = 0;
 
   // Модуляция (block-rate). modT — абсолютное время LFO; НЕ сбрасывается в
   // reset() (reset перезапускает звук, а не модуляцию). modSaved переиспользуем,
@@ -146,6 +166,10 @@ export class FormulaGenerator {
     this.bbT = 0;
     this.bellT = 0;
     this.oceanLp = 0;
+    this.rissT = 0;
+    this.rainLp = 0;
+    this.dropT = 1e9; this.dropPhase = 0; this.dropFreq = 0; this.dropAmp = 0;
+    this.rainCounter = 0; this.rainNext = 0;
   }
 
   private initKS(force: boolean): void {
@@ -388,6 +412,51 @@ export class FormulaGenerator {
           const a = 1 - Math.exp((-2 * Math.PI * cut) / sr);
           this.oceanLp = this.oceanLp + a * (white - this.oceanLp);
           x = this.oceanLp * (1 - depth + depth * mix) * 1.8;
+          break;
+        }
+        case 'risset': {
+          // Аддитивный колокол Риссе: сумма затухающих негармонических
+          // партиалов; удар повторяется каждые rissPeriod секунд (как bell).
+          const decay = Math.max(0.2, p.rissDecay);
+          const f0 = Math.max(20, p.rissF0);
+          let s = 0;
+          for (let c = 0; c < RISSET_RATIO.length; c++) {
+            const fc = f0 * RISSET_RATIO[c] + RISSET_DET[c];
+            const env = Math.exp(-this.rissT / (RISSET_DUR[c] * decay));
+            s += RISSET_AMP[c] * env * Math.sin(TWO_PI * fc * this.rissT);
+          }
+          x = s / RISSET_AMP_SUM;
+          this.rissT += 1 / sr;
+          if (this.rissT >= Math.max(0.5, p.rissPeriod)) this.rissT = 0;
+          break;
+        }
+        case 'rain': {
+          // Капли: мягкая шумовая «подложка» + редкие резонансные «плинки» с
+          // восходящим глиссандо (как звук капли). Одна капля за раз (моно).
+          const density = Math.max(0.2, p.rainDensity);
+          const avgSamples = sr / density;
+          if (this.rainCounter >= this.rainNext) {
+            this.dropT = 0;
+            this.dropPhase = 0;
+            this.dropAmp = 0.5 + 0.5 * rng();
+            this.dropFreq = clamp(p.rainPitch * (0.6 + 0.9 * rng()), 100, 6000);
+            this.rainNext = this.rainCounter + avgSamples * (0.5 + rng());
+          }
+          this.rainCounter++;
+
+          const dropDecay = 0.12;
+          const env = Math.exp(-this.dropT / dropDecay);
+          const glide = 1 + 0.5 * (1 - Math.exp(-this.dropT * 60)); // «бульк» вверх
+          this.dropPhase += (TWO_PI * this.dropFreq * glide) / sr;
+          const drop = this.dropAmp * env * Math.sin(this.dropPhase);
+          this.dropT += 1 / sr;
+
+          const white = rng() * 2 - 1;
+          const bedA = 1 - Math.exp((-2 * Math.PI * 2000) / sr);
+          this.rainLp = this.rainLp + bedA * (white - this.rainLp);
+          const bed = clamp(p.rainBed, 0, 1);
+
+          x = drop * 0.9 + this.rainLp * bed * 0.6;
           break;
         }
       }

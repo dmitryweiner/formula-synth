@@ -5,7 +5,7 @@
 **A web application for sound synthesis based on mathematical formulas.**
 
 An interactive audio laboratory where sound is generated in real-time via the
-AudioWorklet API. Nineteen generators, each a mathematical formula turned into
+AudioWorklet API. Twenty-one generators, each a mathematical formula turned into
 a sound wave, can play simultaneously through a chain of effects. A modulation
 matrix (LFOs → generator parameters) lets patches evolve over time. Successor of
 `neural-things/formulas-audio-lab`, moved to its own repository and ported to
@@ -78,6 +78,10 @@ no longer maintained; `localStorage` keys are kept so saved user presets survive
 - Share → base64url token in the URL hash (`#s=…`)
 - Auto-loading from URL on open; shared URLs include the preset name and are
   auto-saved to the recipient's presets
+- `?preset=<name|index>` query param selects a built-in preset on open — by
+  exact/case-insensitive name or 1-based index (e.g.
+  `?preset=Aurora%20pad%20(mod)` or `?preset=8`). A `#s=` share token, when
+  present, takes precedence.
 - Parsing is tolerant: unknown/broken fields (including `mod`) are dropped
 
 ---
@@ -108,6 +112,8 @@ adjusted with sliders. Multiple generators can play simultaneously.
 | 17 | **FM Bell** (`bell`) | `e^(−3t/d)·sin(2π·f·t + I·e^(−3t/d)·sin(2π·ratio·f·t))` | f0 100–1000 Hz, inharmonicity 1–3, FM index 0–10, decay 0.5–8 s, strike period 1–20 s |
 | 18 | **Bytebeat** (`bytebeat`) | classic integer formulas, e.g. `((t>>10)&42)·t` mod 256 | recipe 1–5, rate 1000–16000 Hz |
 | 19 | **Ocean / Wind** (`ocean`) | noise → breathing 1-pole LP driven by two slow LFOs | wave rate 0.03–0.5 Hz, cutoff 100–2000 Hz, swell depth 0–1 |
+| 20 | **Risset Bell** (`risset`) | additive bell: `Σ aₖ·e^(−t/dₖ)·sin(2π·f0·ratioₖ·t)`, 11 inharmonic partials (Risset, 1969) | f0 100–1200 Hz, decay 0.5–12 s, strike period 1–20 s |
+| 21 | **Rain / Drops** (`rain`) | sparse resonant water drops (decaying upward chirp) over a soft LP-noise bed | drops 0.5–20 /s, drop pitch 200–3000 Hz, bed level 0–1 |
 
 Notes:
 
@@ -157,8 +163,13 @@ function of absolute time, so all generators stay perfectly in sync without any
 cross-thread messaging. Currently only **generator** parameters are modulated
 (effects are not, yet).
 
-Demo presets: **Tidal drift (mod)** (periodic LFOs drifting an FM tone) and
-**Generative bells (S&H)** (a random LFO stepping bell pitch on each strike).
+Demo presets: **Tidal drift (mod)** (periodic LFOs drifting an FM tone),
+**Generative bells (S&H)** (a random LFO stepping bell pitch on each strike),
+**Aurora pad (mod)** (an additive pad with a drifting fundamental and breathing
+harmonics), **Wandering Lorenz (mod)** (chaos with a slowly drifting pitch
+centre), **Cathedral bells (Risset)** (additive bells whose pitch drifts in
+octaves), and **Cave drips (mod)** (rain drops whose rate and pitch slowly
+wander).
 
 ---
 

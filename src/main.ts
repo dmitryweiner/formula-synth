@@ -743,8 +743,26 @@ userPresets = loadUserPresets();
 populatePresetDropdown();
 updateFXLabels();
 
+// Встроенный пресет по query-параметру ?preset=<имя|номер>: точное имя,
+// затем без учёта регистра, затем 1-based индекс. Удобно шарить конкретный
+// пресет коротким URL (полное состояние по-прежнему едет в #s=…).
+function findBuiltinPreset(q: string): (typeof PRESETS)[number] | null {
+  const key = q.trim();
+  if (!key) return null;
+  const exact = PRESETS.find((p) => p.name === key);
+  if (exact) return exact;
+  const ci = PRESETS.find((p) => p.name.toLowerCase() === key.toLowerCase());
+  if (ci) return ci;
+  if (/^\d+$/.test(key)) {
+    const idx = Number(key) - 1;
+    if (idx >= 0 && idx < PRESETS.length) return PRESETS[idx];
+  }
+  return null;
+}
+
 const urlToken = tokenFromHash(location.hash);
 const urlState = urlToken ? decodeStateToken(urlToken) : null;
+const presetParam = new URLSearchParams(location.search).get('preset');
 if (urlState) {
   applyStateToUI(urlState);
   // именованный шаренный пресет автоматически сохраняем получателю
@@ -757,4 +775,8 @@ if (urlState) {
     populatePresetDropdown();
     setStatus(`loaded shared: ${presetName}`);
   }
+} else if (presetParam !== null) {
+  const preset = findBuiltinPreset(presetParam);
+  if (preset) selectPreset(preset.name, preset.state);
+  else setStatus(`unknown preset: ${presetParam}`);
 }
