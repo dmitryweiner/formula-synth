@@ -3,6 +3,8 @@
 // Математика перенесена 1-в-1 из formulas-audio-lab, включая нормировки и
 // клампы: golden-тесты фиксируют именно это поведение.
 import type { Rng } from './rng';
+import type { LfoDef, ModRoute, ParamRanges } from './mod';
+import { lfoValue, effectiveParam } from './mod';
 
 export type FormulaId =
   | 'fm' | 'logistic' | 'gliss' | 'additive' | 'pm' | 'beats' | 'dist' | 'quasi'
@@ -100,6 +102,15 @@ export class FormulaGenerator {
   private bellT = 0;
   private oceanLp = 0;
 
+  // Модуляция (block-rate). modT — абсолютное время LFO; НЕ сбрасывается в
+  // reset() (reset перезапускает звук, а не модуляцию). modSaved переиспользуем,
+  // чтобы не аллоцировать на каждый блок.
+  private modT = 0;
+  private modLfos: readonly LfoDef[] = [];
+  private modRoutes: readonly ModRoute[] = [];
+  private modRanges: ParamRanges = {};
+  private modSaved: number[] = [];
+
   constructor(formula: FormulaId, sampleRate: number, params?: Params, rng: Rng = Math.random) {
     this.formula = formula;
     this.sr = sampleRate;
@@ -110,6 +121,13 @@ export class FormulaGenerator {
 
   set(params: Params): void {
     for (const [k, v] of Object.entries(params)) this.p[k] = v;
+  }
+
+  /** Маршруты модуляции, нацеленные на этот генератор, + пул LFO и диапазоны. */
+  setMod(lfos: readonly LfoDef[], routes: readonly ModRoute[], ranges: ParamRanges): void {
+    this.modLfos = lfos;
+    this.modRoutes = routes;
+    this.modRanges = ranges;
   }
 
   reset(): void {
@@ -146,6 +164,22 @@ export class FormulaGenerator {
     const sr = this.sr;
     const rng = this.rng;
     const p = this.p;
+
+    // Модуляция «поверх» базы: сохраняем базовые значения модулируемых
+    // параметров, записываем эффективные (постоянные на весь блок), крутим
+    // блок как обычно, затем восстанавливаем базу (см. хвост fill()).
+    const routes = this.modRoutes;
+    const modSaved = this.modSaved;
+    modSaved.length = 0;
+    for (let ri = 0; ri < routes.length; ri++) {
+      const r = routes[ri];
+      const base = p[r.param];
+      modSaved.push(base);
+      const lfo = this.modLfos[r.src];
+      const range = this.modRanges[r.param];
+      if (lfo === undefined || range === undefined || !Number.isFinite(base)) continue;
+      p[r.param] = effectiveParam(base, lfoValue(lfo, this.modT), r.depth, range, r.exp ?? false);
+    }
 
     let phase = this.phase;
     let t = this.t;
@@ -366,5 +400,9 @@ export class FormulaGenerator {
     this.phase = phase; this.t = t; this.logi = logi;
     this.lx = lx; this.ly = ly; this.lz = lz;
     this.nlp = nlp;
+
+    // Восстанавливаем базу модулируемых параметров и продвигаем время LFO.
+    for (let ri = 0; ri < routes.length; ri++) p[routes[ri].param] = modSaved[ri];
+    this.modT += n / sr;
   }
 }

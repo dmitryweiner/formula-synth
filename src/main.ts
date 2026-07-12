@@ -5,6 +5,8 @@ import { PRESETS } from './presets';
 import { AudioEngine } from './audio/engine';
 import { encodeWAV } from './dsp/wav';
 import type { AppState, FxState, PartialAppState } from './state/schema';
+import type { ModState } from './dsp/mod';
+import { ModMatrix } from './ui/modmatrix';
 import { DEFAULT_FX, DEFAULT_MASTER_GAIN } from './state/schema';
 import { encodeStateToken, decodeStateToken, tokenFromHash } from './state/share';
 import { loadUserPresets, saveUserPresets, nextPresetNumber } from './state/userPresets';
@@ -23,6 +25,35 @@ const statusEl = el('status');
 
 let userPresets: UserPreset[] = [];
 let selectedPresetName: string | null = null;
+
+// Матрица модуляции (phase 4): своя панель Modulators + таблица маршрутов.
+// modMatrix — источник истины по mod; при правке шлём в движок и подсвечиваем
+// «живые» слайдеры. (onModChange/updateModIndicators — hoisted, дёргаются
+// только по действию пользователя, когда modMatrix уже создан.)
+function onModChange(): void {
+  const mod = modMatrix.getState();
+  if (engine.running) engine.setMod(mod);
+  updateModIndicators(mod);
+}
+function updateModIndicators(mod: ModState | undefined): void {
+  const targets = new Set((mod?.routes ?? []).map((r) => `${r.formula}_${r.param}`));
+  for (const f of FORMULAS) {
+    for (const s of f.sliders) {
+      const row = document.getElementById(`${f.id}_${s.k}`)?.closest('.ctrl');
+      if (row) row.classList.toggle('modulated', targets.has(`${f.id}_${s.k}`));
+    }
+  }
+}
+const modMatrix = new ModMatrix({
+  host: el('modPanel'),
+  formulas: FORMULAS,
+  lfoCount: 3,
+  onChange: onModChange,
+  isEnabled: (id) => {
+    const e = document.getElementById(`en_${id}`);
+    return e instanceof HTMLInputElement && e.checked;
+  },
+});
 
 let isRecording = false;
 let downloadUrl: string | null = null;
@@ -120,7 +151,7 @@ function readStateFromUI(): AppState {
     for (const s of f.sliders) params[s.k] = Number(inputEl(`${f.id}_${s.k}`).value);
     formulas[f.id] = { enabled, params };
   }
-  return { v: 2, masterGain: Number(inputEl('masterGain').value), fx: readFxFromUI(), formulas };
+  return { v: 3, masterGain: Number(inputEl('masterGain').value), fx: readFxFromUI(), formulas, mod: modMatrix.getState() };
 }
 
 function updateFXLabels(): void {
@@ -155,6 +186,7 @@ function setFormulaCollapsed(id: string, collapsed: boolean): void {
 }
 
 function resetToDefaults(): void {
+  modMatrix.setState(undefined);
   inputEl('masterGain').value = String(DEFAULT_MASTER_GAIN);
   el('masterGainVal').textContent = DEFAULT_MASTER_GAIN.toFixed(3);
 
@@ -262,6 +294,11 @@ function applyStateToUI(state: PartialAppState, resetFirst = false): void {
       el(`${f.id}_${s.k}_v`).textContent = fmt(v);
     }
   }
+
+  // Матрицу выставляем в конце: приёмники-выпадашки фильтруются по включённым
+  // формулам, а чекбоксы enable выставлены выше по функции.
+  modMatrix.setState(state.mod);
+  updateModIndicators(modMatrix.getState());
 }
 
 function updateResetButtons(): void {
@@ -351,12 +388,32 @@ scopeModeBtn.addEventListener('click', () => {
 // ---------- Панель эффектов ----------
 const effectsPanel = el('effectsPanel');
 const effectsBtn = buttonEl('effectsBtn');
+const modPanel = el('modPanel');
+const modBtn = buttonEl('modBtn');
+
+function closeModPanel(): void {
+  modPanel.classList.remove('open');
+  modBtn.classList.remove('active');
+}
+function closeEffectsPanel(): void {
+  effectsPanel.classList.remove('open');
+  effectsBtn.classList.remove('active');
+}
+
 effectsBtn.addEventListener('click', () => {
   const open = !effectsPanel.classList.contains('open');
   effectsPanel.classList.toggle('open', open);
   effectsBtn.classList.toggle('active', open);
+  if (open) closeModPanel();
   // панель эффектов вытесняет осциллограф
   setScopeCollapsed(open);
+});
+
+modBtn.addEventListener('click', () => {
+  const open = !modPanel.classList.contains('open');
+  modPanel.classList.toggle('open', open);
+  modBtn.classList.toggle('active', open);
+  if (open) { closeEffectsPanel(); setScopeCollapsed(true); }
 });
 
 const fxRoutingInputs = ['fxFilterOn', 'fxChorusOn', 'fxReverbOn', 'fxLimiterOn', 'fxDelayOn', 'fxPhaserOn'];
@@ -389,6 +446,7 @@ buttonEl('disableAllBtn').addEventListener('click', () => {
     if (engine.running) engine.setFormulaEnabled(f.id, false, 0);
   }
   updateResetButtons();
+  modMatrix.refreshFormulas();
 });
 
 const collapseAllBtn = buttonEl('collapseAllBtn');
@@ -427,6 +485,7 @@ for (const f of FORMULAS) {
     engine.setFormulaEnabled(f.id, on, Number(inputEl(`${f.id}_gain`).value));
     setFormulaActive(f.id, on);
     updateResetButtons();
+    modMatrix.refreshFormulas(); // список приёмников в роутах следит за включёнными
 
     // включили — развернуть, выключили — свернуть
     setFormulaCollapsed(f.id, !on);

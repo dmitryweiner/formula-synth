@@ -6,7 +6,8 @@
 
 An interactive audio laboratory where sound is generated in real-time via the
 AudioWorklet API. Nineteen generators, each a mathematical formula turned into
-a sound wave, can play simultaneously through a chain of effects. Successor of
+a sound wave, can play simultaneously through a chain of effects. A modulation
+matrix (LFOs → generator parameters) lets patches evolve over time. Successor of
 `neural-things/formulas-audio-lab`, moved to its own repository and ported to
 TypeScript + Vite with unit tests.
 
@@ -35,13 +36,18 @@ src/dsp/generator.ts      pure DSP core: all 19 formulas, sample-by-sample,
                           injectable RNG (deterministic in tests)
 src/dsp/gate.ts           per-generator fade-to-silence gate; when off, the
                           worklet skips computing samples entirely (CPU saving)
+src/dsp/mod.ts            modulation matrix (pure): LFO shapes as functions of
+                          time + effective-parameter math (clamp/bipolar/exp)
 src/dsp/{wav,recorder}.ts WAV encoder (16-bit PCM), PCM chunk collector
 src/worklet/processors.ts AudioWorklet entries (generator + recorder) — thin
                           wrappers over the DSP core, bundled as a separate
                           chunk via Vite `?worker&url`
-src/audio/engine.ts       Web Audio graph: mix bus, FX chain, recording
-src/state/…               state schema (v2), base64url share links, user presets
-src/ui/…                  scope/spectrogram, +/- buttons, wake lock, DOM helpers
+src/audio/engine.ts       Web Audio graph: mix bus, FX chain, recording; sends
+                          each generator its modulation routes + LFO pool
+src/state/…               state schema (v3, incl. mod), base64url share links,
+                          user presets
+src/ui/…                  scope/spectrogram, +/- buttons, wake lock, DOM helpers,
+                          modulation matrix panel (modmatrix.ts)
 src/main.ts               UI assembly and wiring
 src/formulas.ts           UI schema: titles, descriptions, slider ranges
 src/presets.ts            built-in presets
@@ -62,15 +68,17 @@ src/presets.ts            built-in presets
 
 ### State
 
-All functional state (enabled effects/formulas and their parameters) is
-serialized to JSON (format `v: 2`, compatible with the old
-formulas-audio-lab — old share links keep working):
+All functional state (enabled effects/formulas and their parameters, plus the
+modulation matrix) is serialized to JSON (format `v: 3`). Since the app moved to
+its own repository, compatibility with old `formulas-audio-lab` share links is
+no longer maintained; `localStorage` keys are kept so saved user presets survive.
 
 - User presets → `localStorage` (key `formula_audio_lab_user_presets_v1`,
   kept from the old app so existing presets survive)
 - Share → base64url token in the URL hash (`#s=…`)
 - Auto-loading from URL on open; shared URLs include the preset name and are
   auto-saved to the recipient's presets
+- Parsing is tolerant: unknown/broken fields (including `mod`) are dropped
 
 ---
 
@@ -126,11 +134,39 @@ The effects panel opens with the 🎛 button. Each effect is enabled with an "ON
 
 ---
 
+## Modulation
+
+The modulation matrix opens with the ∿ button. Any generator parameter can be
+made to slowly evolve, driven by a low-frequency oscillator — so a static patch
+becomes a living, drifting one.
+
+- **Modulators** — a pool of 3 LFOs, each with a shape (Sine / Triangle / Saw /
+  Square / **Random**, i.e. sample-and-hold), rate 0.02–8 Hz, and phase 0–1.
+- **Routes** — a table of `source LFO → formula.parameter → depth` rows
+  (add/remove freely). Depth is bipolar (−1…+1) as a fraction of the
+  parameter's range. **exp** switches to exponential (octave) mapping and is
+  on by default for frequency parameters, which are perceived logarithmically.
+- The receiver list shows only **enabled** generators (a route to a disabled
+  one would be silent); if you disable a formula a route points at, the route
+  is kept and its target is shown as `(off)`.
+- Modulated sliders are marked with a ∿ badge so it's clear which numbers are
+  "live".
+
+Modulation is computed once per audio block (control-rate). Each LFO is a pure
+function of absolute time, so all generators stay perfectly in sync without any
+cross-thread messaging. Currently only **generator** parameters are modulated
+(effects are not, yet).
+
+Demo presets: **Tidal drift (mod)** (periodic LFOs drifting an FM tone) and
+**Generative bells (S&H)** (a random LFO stepping bell pitch on each strike).
+
+---
+
 ## UI
 
 - **Top bar**: Play/Stop, Record (WAV), presets dropdown (built-in + user
   presets with delete), Save preset, Share, 📊 scope toggle, 🎛 effects
-  panel, ? help popup (auto-shows on first visit).
+  panel, ∿ modulation panel, ? help popup (auto-shows on first visit).
 - **Auto-start**: enabling any formula starts audio automatically.
 - **Oscilloscope / Spectrogram**: Wave/Spectrum toggle; spectrogram is a
   scrolling waterfall with a logarithmic frequency scale (20 Hz–10 kHz),

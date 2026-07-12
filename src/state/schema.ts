@@ -2,6 +2,8 @@
 // formulas-audio-lab: те же ключи в URL-хэше и localStorage, чтобы
 // старые share-ссылки и сохранённые пресеты продолжали работать.
 import type { Params } from '../dsp/generator';
+import { isFormulaId } from '../dsp/generator';
+import type { LfoDef, LfoShape, ModRoute, ModState } from '../dsp/mod';
 
 export type FilterType = 'lowpass' | 'highpass' | 'bandpass';
 export type ChorusMode = 'chorus' | 'flanger';
@@ -23,11 +25,12 @@ export interface FormulaSnapshot {
 }
 
 export interface AppState {
-  v: 2;
+  v: 3;
   presetName?: string;
   masterGain: number;
   fx: FxState;
   formulas: Record<string, FormulaSnapshot>;
+  mod?: ModState;
 }
 
 // Частичное состояние — результат разбора URL/пресета: применяется
@@ -42,6 +45,7 @@ export interface PartialAppState {
   masterGain?: number;
   fx?: Partial<FxState>;
   formulas?: Record<string, PartialFormulaSnapshot>;
+  mod?: ModState;
 }
 
 export const DEFAULT_MASTER_GAIN = 0.25;
@@ -100,6 +104,53 @@ function sanitizeFx(u: unknown): Partial<FxState> | undefined {
   return fx;
 }
 
+const LFO_SHAPES: ReadonlySet<string> = new Set(['sine', 'triangle', 'saw', 'square', 'random']);
+
+function isLfoShape(v: unknown): v is LfoShape {
+  return typeof v === 'string' && LFO_SHAPES.has(v);
+}
+
+function sanitizeLfo(u: unknown): LfoDef | null {
+  if (!isRecord(u)) return null;
+  const { shape, rate, phase } = u;
+  if (!isLfoShape(shape)) return null;
+  if (typeof rate !== 'number' || !Number.isFinite(rate)) return null;
+  if (typeof phase !== 'number' || !Number.isFinite(phase)) return null;
+  return { shape, rate, phase };
+}
+
+function sanitizeRoute(u: unknown, lfoCount: number): ModRoute | null {
+  if (!isRecord(u)) return null;
+  const { src, formula, param, depth, exp } = u;
+  if (typeof src !== 'number' || !Number.isInteger(src) || src < 0 || src >= lfoCount) return null;
+  if (typeof formula !== 'string' || !isFormulaId(formula)) return null;
+  if (typeof param !== 'string') return null;
+  if (typeof depth !== 'number' || !Number.isFinite(depth)) return null;
+  const route: ModRoute = { src, formula, param, depth };
+  if (typeof exp === 'boolean') route.exp = exp;
+  return route;
+}
+
+// Маршруты ссылаются на LFO по позиционному индексу (src), поэтому «выкинуть
+// битый LFO из середины» молча сдвинуло бы все индексы — вместо этого битый
+// LFO рушит весь блок mod. Маршруты же независимы: негодные отбрасываем поштучно.
+function sanitizeMod(u: unknown): ModState | undefined {
+  if (!isRecord(u)) return undefined;
+  if (!Array.isArray(u.lfos) || !Array.isArray(u.routes)) return undefined;
+  const lfos: LfoDef[] = [];
+  for (const raw of u.lfos) {
+    const lfo = sanitizeLfo(raw);
+    if (!lfo) return undefined;
+    lfos.push(lfo);
+  }
+  const routes: ModRoute[] = [];
+  for (const raw of u.routes) {
+    const route = sanitizeRoute(raw, lfos.length);
+    if (route) routes.push(route);
+  }
+  return { lfos, routes };
+}
+
 /** Терпимый разбор состояния из JSON (URL, localStorage, пресеты). */
 export function sanitizeState(u: unknown): PartialAppState | null {
   if (!isRecord(u)) return null;
@@ -122,5 +173,7 @@ export function sanitizeState(u: unknown): PartialAppState | null {
     }
     out.formulas = formulas;
   }
+  const mod = sanitizeMod(u.mod);
+  if (mod) out.mod = mod;
   return out;
 }

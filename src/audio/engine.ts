@@ -12,6 +12,7 @@ import workletUrl from '../worklet/processors.ts?worker&url';
 import { FORMULAS } from '../formulas';
 import type { FxState } from '../state/schema';
 import type { Params } from '../dsp/generator';
+import type { LfoDef, ModRoute, ModState, ParamRanges } from '../dsp/mod';
 
 export interface FormulaSetting {
   enabled: boolean;
@@ -22,6 +23,15 @@ export interface EngineState {
   masterGain: number;
   fx: FxState;
   formulas: Record<string, FormulaSetting>;
+  mod?: ModState;
+}
+
+// Пейлоуд модуляции для одной ноды: полный пул LFO, только нацеленные на эту
+// формулу маршруты и диапазоны затронутых параметров.
+interface ModPayload {
+  lfos: LfoDef[];
+  routes: ModRoute[];
+  ranges: ParamRanges;
 }
 
 interface FormulaNodes {
@@ -90,6 +100,8 @@ export class AudioEngine {
 
   private recorderNode: AudioWorkletNode | null = null;
   private nodes = new Map<string, FormulaNodes>();
+
+  private modState: ModState | null = null;
 
   get running(): boolean {
     return this.ctx !== null;
@@ -189,6 +201,7 @@ export class AudioEngine {
     });
 
     this.applyFx(state.fx);
+    this.modState = state.mod ?? null;
 
     // Генераторы
     for (const f of FORMULAS) {
@@ -198,7 +211,10 @@ export class AudioEngine {
         numberOfInputs: 0,
         numberOfOutputs: 1,
         outputChannelCount: [1],
-        processorOptions: { formula: f.id, params, enabled: setting ? setting.enabled : false },
+        processorOptions: {
+          formula: f.id, params, enabled: setting ? setting.enabled : false,
+          mod: this.modPayloadFor(f.id),
+        },
       });
       const g = ctx.createGain();
       g.gain.value = 0;
@@ -420,6 +436,36 @@ export class AudioEngine {
     this.nodes.get(id)?.aw.port.postMessage({ type: 'reset' });
   }
 
+  // Собирает пейлоуд модуляции для формулы: маршруты фильтруются по приёмнику,
+  // диапазоны берутся из UI-схемы (formulas.ts) — ядру передаём только нужное.
+  private modPayloadFor(formula: string): ModPayload {
+    const mod = this.modState;
+    if (!mod) return { lfos: [], routes: [], ranges: {} };
+    const routes = mod.routes.filter((r) => r.formula === formula);
+    const ranges: ParamRanges = {};
+    const def = FORMULAS.find((f) => f.id === formula);
+    if (def) {
+      for (const r of routes) {
+        const s = def.sliders.find((sl) => sl.k === r.param);
+        if (s) ranges[r.param] = [s.min, s.max];
+      }
+    }
+    return { lfos: mod.lfos, routes, ranges };
+  }
+
+  private pushMod(id: string): void {
+    const st = this.nodes.get(id);
+    if (!st) return;
+    st.aw.port.postMessage({ type: 'mod', ...this.modPayloadFor(id) });
+  }
+
+  /** Живое обновление матрицы модуляции: рассылает маршруты по нодам. */
+  setMod(mod: ModState | undefined): void {
+    this.modState = mod ?? null;
+    if (!this.ctx) return;
+    for (const f of FORMULAS) this.pushMod(f.id);
+  }
+
   /** Живое применение целого состояния (после загрузки пресета/URL). */
   applyState(state: EngineState): void {
     const ctx = this.ctx;
@@ -435,6 +481,7 @@ export class AudioEngine {
       const gain = typeof setting.params.gain === 'number' ? setting.params.gain : 0;
       st.g.gain.setTargetAtTime(setting.enabled ? gain : 0, ctx.currentTime, GAIN_SMOOTH);
     }
+    this.setMod(state.mod);
   }
 
   startRecording(): void {

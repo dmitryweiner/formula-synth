@@ -1,5 +1,6 @@
 // Встроенные пресеты — кураторские саундскейпы.
 import type { AppState } from './state/schema';
+import { DEFAULT_FX } from './state/schema';
 
 export interface Preset {
   name: string;
@@ -10,7 +11,7 @@ export const PRESETS: Preset[] = [
   {
     name: 'Stillness meditation',
     state: {
-      v: 2,
+      v: 3,
       masterGain: 0.514,
       fx: {
         filterOn: true, filterType: 'lowpass', filterFreq: 3400, filterQ: 6.3,
@@ -34,7 +35,7 @@ export const PRESETS: Preset[] = [
   {
     name: 'Waiting for the subway',
     state: {
-      v: 2,
+      v: 3,
       masterGain: 0.514,
       fx: {
         filterOn: true, filterType: 'lowpass', filterFreq: 2000, filterQ: 6.3,
@@ -59,7 +60,7 @@ export const PRESETS: Preset[] = [
   {
     name: 'Inside the nuclear power plant',
     state: {
-      v: 2,
+      v: 3,
       masterGain: 0.536,
       fx: {
         filterOn: true, filterType: 'lowpass', filterFreq: 2000, filterQ: 10.3,
@@ -79,7 +80,7 @@ export const PRESETS: Preset[] = [
   {
     name: 'Long journey on the helicopter',
     state: {
-      v: 2,
+      v: 3,
       masterGain: 0.585,
       fx: {
         filterOn: true, filterType: 'lowpass', filterFreq: 285, filterQ: 13.3,
@@ -104,7 +105,7 @@ export const PRESETS: Preset[] = [
   {
     name: 'Abandoned shrine',
     state: {
-      v: 2,
+      v: 3,
       masterGain: 0.25,
       fx: {
         filterOn: true, filterType: 'lowpass', filterFreq: 2000, filterQ: 0.7,
@@ -123,6 +124,64 @@ export const PRESETS: Preset[] = [
           params: { gain: 0.293, sigma: 10, rho: 28, beta: 2.6667, lBase: 120, lFreqScale: 40, lAmp: 0.25 },
         },
         noiselp: { enabled: true, params: { gain: 0.1, nCut: 800 } },
+      },
+    },
+  },
+  // --- Демо матрицы модуляции (phase 5) ---
+  {
+    // Периодические LFO: медленный дрейф высоты (в октавах) + «дыхание» тембра.
+    name: 'Tidal drift (mod)',
+    state: {
+      v: 3,
+      masterGain: 0.4,
+      fx: {
+        ...DEFAULT_FX,
+        filterOn: true, filterType: 'lowpass', filterFreq: 1400, filterQ: 0.8,
+        reverbOn: true, reverbDecay: 3.6, reverbMix: 0.42,
+        limiterOn: true,
+      },
+      formulas: {
+        fm: { enabled: true, params: { gain: 0.18, fc: 220, fm: 2, I: 4 } },
+      },
+      mod: {
+        lfos: [
+          { shape: 'sine', rate: 0.05, phase: 0 },
+          { shape: 'sine', rate: 0.13, phase: 0.25 },
+          { shape: 'triangle', rate: 0.08, phase: 0 },
+        ],
+        routes: [
+          { src: 0, formula: 'fm', param: 'fc', depth: 0.15, exp: true },
+          { src: 1, formula: 'fm', param: 'I', depth: 0.6 },
+        ],
+      },
+    },
+  },
+  {
+    // Sample & Hold: случайный источник «переступает» высоту колокола почти
+    // на каждый удар — генеративная звонница; медленная синусоида ведёт тембр.
+    name: 'Generative bells (S&H)',
+    state: {
+      v: 3,
+      masterGain: 0.45,
+      fx: {
+        ...DEFAULT_FX,
+        reverbOn: true, reverbDecay: 5, reverbMix: 0.5,
+        delayOn: true, delayTime: 0.5, delayFb: 0.35, delayMix: 0.3,
+        limiterOn: true,
+      },
+      formulas: {
+        bell: { enabled: true, params: { gain: 0.3, bellF0: 320, bellRatio: 1.4, bellIndex: 4, bellDecay: 3, bellPeriod: 4 } },
+      },
+      mod: {
+        lfos: [
+          { shape: 'random', rate: 0.25, phase: 0 },
+          { shape: 'sine', rate: 0.07, phase: 0 },
+          { shape: 'triangle', rate: 0.03, phase: 0 },
+        ],
+        routes: [
+          { src: 0, formula: 'bell', param: 'bellF0', depth: 0.4, exp: true },
+          { src: 1, formula: 'bell', param: 'bellIndex', depth: 0.5 },
+        ],
       },
     },
   },

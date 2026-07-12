@@ -40,4 +40,26 @@ describe('встроенные пресеты', () => {
       expect(enabled.length, p.name).toBeGreaterThan(0);
     }
   });
+
+  const SHAPES = ['sine', 'triangle', 'saw', 'square', 'random'];
+  it.each(PRESETS.map((p) => [p.name, p] as const))('%s: mod-матрица валидна', (_name, p) => {
+    const mod = p.state.mod;
+    if (!mod) return;
+    for (const lfo of mod.lfos) {
+      expect(SHAPES, `форма ${lfo.shape}`).toContain(lfo.shape);
+      expect(Number.isFinite(lfo.rate)).toBe(true);
+      expect(Number.isFinite(lfo.phase)).toBe(true);
+    }
+    for (const r of mod.routes) {
+      expect(r.src, 'src в пределах пула').toBeGreaterThanOrEqual(0);
+      expect(r.src).toBeLessThan(mod.lfos.length);
+      expect(isFormulaId(r.formula), `формула ${r.formula}`).toBe(true);
+      const def = FORMULAS.find((f) => f.id === r.formula);
+      expect(def?.sliders.some((s) => s.k === r.param), `${r.formula}.${r.param}: нет слайдера`).toBe(true);
+      expect(r.depth).toBeGreaterThanOrEqual(-1);
+      expect(r.depth).toBeLessThanOrEqual(1);
+      // маршрут должен целиться во включённую формулу — иначе модуляции не слышно
+      expect(p.state.formulas[r.formula]?.enabled, `${r.formula} должна быть включена`).toBe(true);
+    }
+  });
 });
