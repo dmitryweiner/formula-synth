@@ -243,6 +243,29 @@ main { padding: 14px; max-width: 1200px; margin: 0 auto; }
 .factions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
 .fbody { margin-top: 10px; }
 .fbody.collapsed { display: none; }
+.resetBtn { width: 28px; padding: 6px 0; text-align: center; }
+
+/* Две колонки формул на широких экранах: каждая карточка — отдельный
+   бокс (у grid-детей нет «предыдущего соседа» для border-top-разделителя). */
+@media (min-width: 720px) {
+  #formulas {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    align-items: start;
+  }
+  #formulas .formula {
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 12px;
+    margin: 0;
+  }
+  #formulas .formula.active {
+    border-left: 3px solid var(--green);
+    margin-left: 0;
+    padding-left: 12px;
+  }
+}
 
 @media (max-width: 600px) {
   .scopeWrap { padding: 8px; }

@@ -37,11 +37,7 @@ function makeFormulaUI(f: (typeof FORMULAS)[number]): void {
   wrap.className = 'formula';
 
   const resetHtml = f.hasReset
-    ? `
-      <div class="sep"></div>
-      <div class="row">
-        <button id="reset_${f.id}" disabled>Reset state</button>
-      </div>`
+    ? `<button class="collapseBtn resetBtn" id="reset_${f.id}" type="button" title="Reset state" disabled>↺</button>`
     : '';
 
   wrap.innerHTML = `
@@ -54,12 +50,13 @@ function makeFormulaUI(f: (typeof FORMULAS)[number]): void {
         <div class="small">${f.desc}</div>
       </div>
       <div class="factions">
-        <button class="collapseBtn" id="col_${f.id}" type="button">▼</button>
+        ${resetHtml}
+        <button class="collapseBtn" id="col_${f.id}" type="button">▶</button>
       </div>
     </div>
 
-    <div class="fbody" id="body_${f.id}">
-      <div id="sl_${f.id}"></div>${resetHtml}
+    <div class="fbody collapsed" id="body_${f.id}">
+      <div id="sl_${f.id}"></div>
     </div>
   `;
   formulasRoot.appendChild(wrap);
@@ -152,6 +149,11 @@ function setFormulaActive(id: string, on: boolean): void {
   if (wrap) wrap.classList.toggle('active', on);
 }
 
+function setFormulaCollapsed(id: string, collapsed: boolean): void {
+  el(`body_${id}`).classList.toggle('collapsed', collapsed);
+  buttonEl(`col_${id}`).textContent = collapsed ? '▶' : '▼';
+}
+
 function resetToDefaults(): void {
   inputEl('masterGain').value = String(DEFAULT_MASTER_GAIN);
   el('masterGainVal').textContent = DEFAULT_MASTER_GAIN.toFixed(3);
@@ -193,6 +195,7 @@ function resetToDefaults(): void {
   for (const f of FORMULAS) {
     inputEl(`en_${f.id}`).checked = false;
     setFormulaActive(f.id, false);
+    setFormulaCollapsed(f.id, true);
     for (const s of f.sliders) {
       inputEl(`${f.id}_${s.k}`).value = String(s.value);
       el(`${f.id}_${s.k}_v`).textContent = fmt(s.value);
@@ -248,6 +251,7 @@ function applyStateToUI(state: PartialAppState, resetFirst = false): void {
     if (st.enabled !== undefined) {
       inputEl(`en_${f.id}`).checked = st.enabled;
       setFormulaActive(f.id, st.enabled);
+      setFormulaCollapsed(f.id, !st.enabled);
     }
 
     const params = st.params ?? {};
@@ -388,13 +392,10 @@ buttonEl('disableAllBtn').addEventListener('click', () => {
 });
 
 const collapseAllBtn = buttonEl('collapseAllBtn');
-let allCollapsed = false;
+let allCollapsed = true; // карточки свёрнуты при загрузке
 collapseAllBtn.addEventListener('click', () => {
   allCollapsed = !allCollapsed;
-  for (const f of FORMULAS) {
-    el(`body_${f.id}`).classList.toggle('collapsed', allCollapsed);
-    buttonEl(`col_${f.id}`).textContent = allCollapsed ? '▶' : '▼';
-  }
+  for (const f of FORMULAS) setFormulaCollapsed(f.id, allCollapsed);
   collapseAllBtn.textContent = allCollapsed ? '▶ Expand all' : '▼ Collapse all';
 });
 
@@ -411,9 +412,7 @@ for (const f of FORMULAS) {
   const col = buttonEl(`col_${f.id}`);
 
   col.addEventListener('click', () => {
-    const collapsed = !body.classList.contains('collapsed');
-    body.classList.toggle('collapsed', collapsed);
-    col.textContent = collapsed ? '▶' : '▼';
+    setFormulaCollapsed(f.id, !body.classList.contains('collapsed'));
   });
 
   en.addEventListener('change', async () => {
@@ -430,8 +429,7 @@ for (const f of FORMULAS) {
     updateResetButtons();
 
     // включили — развернуть, выключили — свернуть
-    body.classList.toggle('collapsed', !on);
-    col.textContent = on ? '▼' : '▶';
+    setFormulaCollapsed(f.id, !on);
   });
 
   if (f.hasReset) {

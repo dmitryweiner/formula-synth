@@ -5,9 +5,13 @@
 **A web application for sound synthesis based on mathematical formulas.**
 
 An interactive audio laboratory where sound is generated in real-time via the
-AudioWorklet API. Each generator is a mathematical formula turned into a sound
-wave. Successor of `neural-things/formulas-audio-lab`, moved to its own
-repository and ported to TypeScript + Vite with unit tests.
+AudioWorklet API. Nineteen generators, each a mathematical formula turned into
+a sound wave, can play simultaneously through a chain of effects. Successor of
+`neural-things/formulas-audio-lab`, moved to its own repository and ported to
+TypeScript + Vite with unit tests.
+
+Disabled generators stop computing entirely (a short fade to silence, then the
+AudioWorklet skips the math), so leaving all cards visible costs nothing.
 
 ---
 
@@ -27,8 +31,10 @@ npm run shot -- --mobile --fx --preview   # mobile viewport, FX panel, prod buil
 ### Architecture
 
 ```text
-src/dsp/generator.ts      pure DSP core: all 16 formulas, sample-by-sample,
+src/dsp/generator.ts      pure DSP core: all 19 formulas, sample-by-sample,
                           injectable RNG (deterministic in tests)
+src/dsp/gate.ts           per-generator fade-to-silence gate; when off, the
+                          worklet skips computing samples entirely (CPU saving)
 src/dsp/{wav,recorder}.ts WAV encoder (16-bit PCM), PCM chunk collector
 src/worklet/processors.ts AudioWorklet entries (generator + recorder) — thin
                           wrappers over the DSP core, bundled as a separate
@@ -91,6 +97,9 @@ adjusted with sliders. Multiple generators can play simultaneously.
 | 14 | **Pink Noise** (`pinknoise`) | Paul Kellet's 1/f approximation | brightness 0–1 |
 | 15 | **Brown Noise** (`brownnoise`) | `x[n] = clamp(x[n−1] + noise·step)` | step 0.001–0.1 |
 | 16 | **Velvet Noise** (`velvetnoise`) | sparse ±1 impulses | density 100–10000 imp/s |
+| 17 | **FM Bell** (`bell`) | `e^(−3t/d)·sin(2π·f·t + I·e^(−3t/d)·sin(2π·ratio·f·t))` | f0 100–1000 Hz, inharmonicity 1–3, FM index 0–10, decay 0.5–8 s, strike period 1–20 s |
+| 18 | **Bytebeat** (`bytebeat`) | classic integer formulas, e.g. `((t>>10)&42)·t` mod 256 | recipe 1–5, rate 1000–16000 Hz |
+| 19 | **Ocean / Wind** (`ocean`) | noise → breathing 1-pole LP driven by two slow LFOs | wave rate 0.03–0.5 Hz, cutoff 100–2000 Hz, swell depth 0–1 |
 
 Notes:
 
