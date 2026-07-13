@@ -184,8 +184,11 @@ scripts/shot.mjs       playwright-скриншоты + аудио-смоук
   уже есть; risset сейчас без общего демо-пресета (Cathedral bells убрали) —
   можно вернуть в src/presets.ts.
 - Вернуть am/bitcrush по желанию (формулы есть в старом README).
-- Модуляция (MODULATION.md, phase 6, опционально): модуляция FX нативными
-  Web Audio-нодами; drag-to-assign у слайдера; генератор как источник.
+- Модуляция FX (LFO → фильтры/эффекты) — план в **FX_MODULATION.md**:
+  control-rate модулятор на главном потоке в engine.ts, переиспользует
+  lfoValue/effectiveParam/applyFxParams; минимальный заход — «LFO → cutoff».
+- Прочее из MODULATION.md phase 6: drag-to-assign у слайдера; генератор как
+  источник модуляции.
 
 ## Чего не делать
 
