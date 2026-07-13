@@ -22,9 +22,9 @@
     <div class="btn-group">
       <button id="playStopBtn" class="nt-toggle-btn">▶ Play</button>
       <button id="recBtn" disabled>Record</button>
-      <button id="scopeToggleBtn" class="collapseBtn" type="button">📊</button>
-      <button id="effectsBtn" class="collapseBtn" type="button">🎛</button>
-      <button id="modBtn" class="collapseBtn" type="button" title="Modulation">∿</button>
+      <button id="scopeToggleBtn" class="collapseBtn panelToggle" type="button" title="Oscilloscope / spectrogram"><span class="ptIcon">📊</span><span class="ptLabel">Scope</span></button>
+      <button id="effectsBtn" class="collapseBtn panelToggle" type="button" title="Effects panel"><span class="ptIcon">🎛</span><span class="ptLabel">Effects</span></button>
+      <button id="modBtn" class="collapseBtn panelToggle" type="button" title="Modulation panel"><span class="ptIcon">∿</span><span class="ptLabel">Mod</span></button>
     </div>
 
     <div class="btn-group">
@@ -38,49 +38,86 @@
   </div>
 
   <div class="topgrid">
-    <div class="scopeWrap" id="scopeWrap">
-      <button id="scopeModeBtn" class="collapseBtn scopeModeBtn" type="button">Spectrum</button>
-      <canvas id="scope"></canvas>
-    </div>
-    <div class="ctrl with-adj" style="margin-top: 10px;">
+    <div class="ctrl with-adj">
       <label>Master volume</label>
       <button class="adj-btn" data-slider="masterGain" data-dir="-1">−</button>
       <input id="masterGain" type="range" min="0" max="1" step="0.001" value="0.25">
       <button class="adj-btn" data-slider="masterGain" data-dir="1">+</button>
       <div class="small" id="masterGainVal">0.25</div>
     </div>
+    <div class="scopeWrap" id="scopeWrap" style="margin-top: 10px;">
+      <button id="scopeModeBtn" class="collapseBtn scopeModeBtn" type="button">Spectrum</button>
+      <canvas id="scope"></canvas>
+    </div>
   </div>
 
   <div id="effectsPanel" class="effectsPanel">
+    <div class="filterPresetBar">
+      <label class="small" for="fxPreset">Effects preset</label>
+      <select id="fxPreset"><option value="">— select an effect —</option></select>
+      <span class="small filterPresetHint">configures one effect module below</span>
+    </div>
     <div class="effectsGrid">
 
       <div class="fxCard">
         <h2>
-          <span>Filter (Biquad)</span>
+          <span>Filter</span>
           <label class="small"><input id="fxFilterOn" type="checkbox"> ON</label>
         </h2>
         <div class="ctrl">
           <label>Type</label>
           <select id="fxFilterType">
-            <option value="lowpass">Low-pass</option>
-            <option value="highpass">High-pass</option>
-            <option value="bandpass">Band-pass</option>
+            <optgroup label="Biquad">
+              <option value="lowpass">Low-pass</option>
+              <option value="highpass">High-pass</option>
+              <option value="bandpass">Band-pass</option>
+              <option value="notch">Notch</option>
+              <option value="peaking">Peaking</option>
+              <option value="lowshelf">Low-shelf</option>
+              <option value="highshelf">High-shelf</option>
+              <option value="allpass">All-pass</option>
+            </optgroup>
+            <optgroup label="Character">
+              <option value="formant">Formant (vowel)</option>
+              <option value="comb">Comb</option>
+            </optgroup>
           </select>
           <div></div>
         </div>
-        <div class="ctrl with-adj">
-          <label>Cutoff (Hz)</label>
+        <div class="ctrl with-adj" id="rowFilterFreq">
+          <label id="lblFilterFreq" for="fxFilterFreq">Cutoff (Hz)</label>
           <button class="adj-btn" data-slider="fxFilterFreq" data-dir="-1">−</button>
           <input id="fxFilterFreq" type="range" min="20" max="2000" step="1" value="1000">
           <button class="adj-btn" data-slider="fxFilterFreq" data-dir="1">+</button>
           <div class="small" id="fxFilterFreqVal">1000</div>
         </div>
-        <div class="ctrl with-adj">
-          <label>Q</label>
+        <div class="ctrl with-adj" id="rowFilterQ">
+          <label id="lblFilterQ" for="fxFilterQ">Q</label>
           <button class="adj-btn" data-slider="fxFilterQ" data-dir="-1">−</button>
           <input id="fxFilterQ" type="range" min="0.1" max="30" step="0.1" value="0.7">
           <button class="adj-btn" data-slider="fxFilterQ" data-dir="1">+</button>
           <div class="small" id="fxFilterQVal">0.7</div>
+        </div>
+        <div class="ctrl with-adj" id="rowFilterGain" style="display:none">
+          <label for="fxFilterGain">Gain (dB)</label>
+          <button class="adj-btn" data-slider="fxFilterGain" data-dir="-1">−</button>
+          <input id="fxFilterGain" type="range" min="-24" max="24" step="0.1" value="0">
+          <button class="adj-btn" data-slider="fxFilterGain" data-dir="1">+</button>
+          <div class="small" id="fxFilterGainVal">0.0</div>
+        </div>
+        <div class="ctrl with-adj" id="rowFilterVowel" style="display:none">
+          <label for="fxFilterVowel">Vowel (A–U)</label>
+          <button class="adj-btn" data-slider="fxFilterVowel" data-dir="-1">−</button>
+          <input id="fxFilterVowel" type="range" min="0" max="1" step="0.01" value="0">
+          <button class="adj-btn" data-slider="fxFilterVowel" data-dir="1">+</button>
+          <div class="small" id="fxFilterVowelVal">A</div>
+        </div>
+        <div class="ctrl with-adj" id="rowFilterCombFb" style="display:none">
+          <label for="fxFilterCombFb">Feedback</label>
+          <button class="adj-btn" data-slider="fxFilterCombFb" data-dir="-1">−</button>
+          <input id="fxFilterCombFb" type="range" min="0" max="0.95" step="0.01" value="0.5">
+          <button class="adj-btn" data-slider="fxFilterCombFb" data-dir="1">+</button>
+          <div class="small" id="fxFilterCombFbVal">0.50</div>
         </div>
       </div>
 

@@ -4,9 +4,10 @@ import { FORMULAS } from './formulas';
 import { PRESETS } from './presets';
 import { AudioEngine } from './audio/engine';
 import { encodeWAV } from './dsp/wav';
-import type { AppState, FxState, PartialAppState } from './state/schema';
+import type { AppState, FxState, FilterType, PartialAppState } from './state/schema';
 import type { ModState } from './dsp/mod';
 import { ModMatrix } from './ui/modmatrix';
+import { FX_PRESETS } from './fxPresets';
 import { DEFAULT_FX, DEFAULT_MASTER_GAIN } from './state/schema';
 import { encodeStateToken, decodeStateToken, tokenFromHash } from './state/share';
 import { loadUserPresets, saveUserPresets, nextPresetNumber } from './state/userPresets';
@@ -110,14 +111,31 @@ function makeFormulaUI(f: (typeof FORMULAS)[number]): void {
 for (const f of FORMULAS) makeFormulaUI(f);
 
 // ---------- Чтение/применение состояния ----------
+const VOWEL_LETTERS = ['A', 'E', 'I', 'O', 'U'];
+function vowelLabel(v: number): string {
+  return VOWEL_LETTERS[Math.max(0, Math.min(4, Math.round(v * 4)))];
+}
+
+function toFilterType(v: string): FilterType {
+  switch (v) {
+    case 'lowpass': case 'highpass': case 'bandpass': case 'notch':
+    case 'peaking': case 'lowshelf': case 'highshelf': case 'allpass':
+    case 'formant': case 'comb':
+      return v;
+    default: return 'lowpass';
+  }
+}
+
 function readFxFromUI(): FxState {
-  const filterTypeRaw = selectEl('fxFilterType').value;
   const chorusModeRaw = selectEl('fxChorusMode').value;
   return {
     filterOn: inputEl('fxFilterOn').checked,
-    filterType: filterTypeRaw === 'highpass' ? 'highpass' : filterTypeRaw === 'bandpass' ? 'bandpass' : 'lowpass',
+    filterType: toFilterType(selectEl('fxFilterType').value),
     filterFreq: Number(inputEl('fxFilterFreq').value),
     filterQ: Number(inputEl('fxFilterQ').value),
+    filterGain: Number(inputEl('fxFilterGain').value),
+    filterVowel: Number(inputEl('fxFilterVowel').value),
+    filterCombFb: Number(inputEl('fxFilterCombFb').value),
     chorusOn: inputEl('fxChorusOn').checked,
     chorusMode: chorusModeRaw === 'flanger' ? 'flanger' : 'chorus',
     chorusRate: Number(inputEl('fxChorusRate').value),
@@ -154,9 +172,26 @@ function readStateFromUI(): AppState {
   return { v: 3, masterGain: Number(inputEl('masterGain').value), fx: readFxFromUI(), formulas, mod: modMatrix.getState() };
 }
 
+const BIQUAD_TYPES = ['lowpass', 'highpass', 'bandpass', 'notch', 'peaking', 'lowshelf', 'highshelf', 'allpass'];
+// Показываем только релевантные текущему типу фильтра контролы + переименовываем
+// Freq/Q под режим (чтобы не путать: у comb это высота, у formant — сдвиг/резонанс).
+function updateFilterControls(): void {
+  const t = selectEl('fxFilterType').value;
+  const setShown = (id: string, on: boolean) => { el(id).style.display = on ? '' : 'none'; };
+  setShown('rowFilterQ', BIQUAD_TYPES.includes(t) || t === 'formant');
+  setShown('rowFilterGain', t === 'peaking' || t === 'lowshelf' || t === 'highshelf');
+  setShown('rowFilterVowel', t === 'formant');
+  setShown('rowFilterCombFb', t === 'comb');
+  el('lblFilterFreq').textContent = t === 'comb' ? 'Pitch (Hz)' : t === 'formant' ? 'Formant shift (Hz)' : 'Cutoff (Hz)';
+  el('lblFilterQ').textContent = t === 'formant' ? 'Resonance' : 'Q';
+}
+
 function updateFXLabels(): void {
   el('fxFilterFreqVal').textContent = inputEl('fxFilterFreq').value;
   el('fxFilterQVal').textContent = Number(inputEl('fxFilterQ').value).toFixed(1);
+  el('fxFilterGainVal').textContent = Number(inputEl('fxFilterGain').value).toFixed(1);
+  el('fxFilterVowelVal').textContent = vowelLabel(Number(inputEl('fxFilterVowel').value));
+  el('fxFilterCombFbVal').textContent = Number(inputEl('fxFilterCombFb').value).toFixed(2);
   el('fxChorusRateVal').textContent = Number(inputEl('fxChorusRate').value).toFixed(2);
   el('fxChorusDepthVal').textContent = Number(inputEl('fxChorusDepth').value).toFixed(1);
   el('fxChorusMixVal').textContent = Number(inputEl('fxChorusMix').value).toFixed(2);
@@ -172,6 +207,7 @@ function updateFXLabels(): void {
   el('fxPhaserDepthVal').textContent = Number(inputEl('fxPhaserDepth').value).toFixed(2);
   el('fxPhaserFbVal').textContent = Number(inputEl('fxPhaserFb').value).toFixed(2);
   el('fxPhaserMixVal').textContent = Number(inputEl('fxPhaserMix').value).toFixed(2);
+  updateFilterControls();
 }
 
 function setFormulaActive(id: string, on: boolean): void {
@@ -194,6 +230,9 @@ function resetToDefaults(): void {
   selectEl('fxFilterType').value = DEFAULT_FX.filterType;
   inputEl('fxFilterFreq').value = String(DEFAULT_FX.filterFreq);
   inputEl('fxFilterQ').value = String(DEFAULT_FX.filterQ);
+  inputEl('fxFilterGain').value = String(DEFAULT_FX.filterGain);
+  inputEl('fxFilterVowel').value = String(DEFAULT_FX.filterVowel);
+  inputEl('fxFilterCombFb').value = String(DEFAULT_FX.filterCombFb);
 
   inputEl('fxChorusOn').checked = DEFAULT_FX.chorusOn;
   selectEl('fxChorusMode').value = DEFAULT_FX.chorusMode;
@@ -255,6 +294,8 @@ function applyStateToUI(state: PartialAppState, resetFirst = false): void {
 
   setChk('fxFilterOn', fx.filterOn); setVal('fxFilterType', fx.filterType);
   setVal('fxFilterFreq', fx.filterFreq); setVal('fxFilterQ', fx.filterQ);
+  setVal('fxFilterGain', fx.filterGain); setVal('fxFilterVowel', fx.filterVowel);
+  setVal('fxFilterCombFb', fx.filterCombFb);
 
   setChk('fxChorusOn', fx.chorusOn); setVal('fxChorusMode', fx.chorusMode);
   setVal('fxChorusRate', fx.chorusRate); setVal('fxChorusDepth', fx.chorusDepth);
@@ -377,54 +418,96 @@ function setScopeCollapsed(collapsed: boolean): void {
 // на узких экранах по умолчанию свёрнут
 setScopeCollapsed(window.matchMedia('(max-width: 600px)').matches);
 
-scopeToggleBtn.addEventListener('click', () => {
-  setScopeCollapsed(!scopeWrap.classList.contains('scopeCollapsed'));
-});
-
 scopeModeBtn.addEventListener('click', () => {
   scopeModeBtn.textContent = scope.toggleMode() === 'wave' ? 'Wave' : 'Spectrum';
 });
 
-// ---------- Панель эффектов ----------
+// ---------- Панели Scope / Effects / Mod — взаимоисключающие (как radio) ----------
 const effectsPanel = el('effectsPanel');
 const effectsBtn = buttonEl('effectsBtn');
 const modPanel = el('modPanel');
 const modBtn = buttonEl('modBtn');
 
-function closeModPanel(): void {
-  modPanel.classList.remove('open');
-  modBtn.classList.remove('active');
+type Panel = 'scope' | 'effects' | 'mod';
+function currentPanel(): Panel | null {
+  if (effectsPanel.classList.contains('open')) return 'effects';
+  if (modPanel.classList.contains('open')) return 'mod';
+  if (!scopeWrap.classList.contains('scopeCollapsed')) return 'scope';
+  return null;
 }
-function closeEffectsPanel(): void {
-  effectsPanel.classList.remove('open');
-  effectsBtn.classList.remove('active');
+// Активна максимум одна панель; выбор одной гасит остальные (повторный клик по
+// активной — выключает всё).
+function setPanel(active: Panel | null): void {
+  effectsPanel.classList.toggle('open', active === 'effects');
+  effectsBtn.classList.toggle('active', active === 'effects');
+  modPanel.classList.toggle('open', active === 'mod');
+  modBtn.classList.toggle('active', active === 'mod');
+  setScopeCollapsed(active !== 'scope');
 }
 
-effectsBtn.addEventListener('click', () => {
-  const open = !effectsPanel.classList.contains('open');
-  effectsPanel.classList.toggle('open', open);
-  effectsBtn.classList.toggle('active', open);
-  if (open) closeModPanel();
-  // панель эффектов вытесняет осциллограф
-  setScopeCollapsed(open);
-});
+scopeToggleBtn.addEventListener('click', () => setPanel(currentPanel() === 'scope' ? null : 'scope'));
+effectsBtn.addEventListener('click', () => setPanel(currentPanel() === 'effects' ? null : 'effects'));
+modBtn.addEventListener('click', () => setPanel(currentPanel() === 'mod' ? null : 'mod'));
 
-modBtn.addEventListener('click', () => {
-  const open = !modPanel.classList.contains('open');
-  modPanel.classList.toggle('open', open);
-  modBtn.classList.toggle('active', open);
-  if (open) { closeEffectsPanel(); setScopeCollapsed(true); }
+// Пресеты модулей эффектов: выставляют СВОИ поля FxState (частично) поверх
+// текущего состояния и включают модуль. Выбор остаётся показанным; сбрасывается
+// на плейсхолдер, когда пользователь трогает любой FX-контрол руками.
+const fxPresetSel = selectEl('fxPreset');
+const fxPresetGroups = new Map<string, HTMLOptGroupElement>();
+for (const p of FX_PRESETS) {
+  let g = fxPresetGroups.get(p.group);
+  if (!g) {
+    g = document.createElement('optgroup');
+    g.label = p.group;
+    fxPresetSel.appendChild(g);
+    fxPresetGroups.set(p.group, g);
+  }
+  const o = document.createElement('option');
+  o.value = p.name; o.textContent = p.name;
+  g.appendChild(o);
+}
+
+// Ключ FxState → id соответствующего контрола (filterOn → fxFilterOn и т.д.).
+function setFxField(key: string, val: number | string | boolean): void {
+  const e = document.getElementById(`fx${key.charAt(0).toUpperCase()}${key.slice(1)}`);
+  if (e instanceof HTMLInputElement) {
+    if (e.type === 'checkbox') e.checked = val === true;
+    else e.value = String(val);
+  } else if (e instanceof HTMLSelectElement) {
+    e.value = String(val);
+  }
+}
+
+fxPresetSel.addEventListener('change', () => {
+  const preset = FX_PRESETS.find((p) => p.name === fxPresetSel.value);
+  if (!preset) return;
+  for (const [k, v] of Object.entries(preset.fx)) {
+    if (v !== undefined) setFxField(k, v);
+  }
+  updateFilterControls();
+  updateFXLabels();
+  if (engine.running) engine.applyFx(readFxFromUI());
 });
 
 const fxRoutingInputs = ['fxFilterOn', 'fxChorusOn', 'fxReverbOn', 'fxLimiterOn', 'fxDelayOn', 'fxPhaserOn'];
 for (const id of fxRoutingInputs) {
   inputEl(id).addEventListener('change', () => {
+    fxPresetSel.value = ''; // ручной тумблинг модуля → уже не именованный пресет
     if (engine.running) engine.applyFx(readFxFromUI());
   });
 }
 
+// Смена типа фильтра меняет и роутинг графа (biquad / formant / comb), поэтому
+// полный applyFx, а не только параметры; плюс показать нужные контролы.
+selectEl('fxFilterType').addEventListener('change', () => {
+  fxPresetSel.value = '';
+  updateFilterControls();
+  updateFXLabels();
+  if (engine.running) engine.applyFx(readFxFromUI());
+});
+
 const fxParamInputs = [
-  'fxFilterType', 'fxFilterFreq', 'fxFilterQ',
+  'fxFilterFreq', 'fxFilterQ', 'fxFilterGain', 'fxFilterVowel', 'fxFilterCombFb',
   'fxChorusMode', 'fxChorusRate', 'fxChorusDepth', 'fxChorusMix', 'fxChorusFb',
   'fxReverbDecay', 'fxReverbMix',
   'fxLimiterThr', 'fxLimiterRel',
@@ -433,6 +516,7 @@ const fxParamInputs = [
 ];
 for (const id of fxParamInputs) {
   el(id).addEventListener('input', () => {
+    fxPresetSel.value = ''; // ручная правка любого FX → сбросить имя пресета
     updateFXLabels();
     if (engine.running) engine.applyFxParams(readFxFromUI());
   });

@@ -1,0 +1,34 @@
+// Чистая сборка пейлоуда модуляции для одной ноды: фильтрует маршруты по
+// приёмнику и достаёт диапазоны нужных параметров из UI-схемы. Вынесено из
+// engine.ts, чтобы покрывать тестами без Web Audio.
+import type { LfoDef, ModRoute, ModState, ParamRanges } from '../dsp/mod';
+
+export interface ModPayload {
+  lfos: LfoDef[];
+  routes: ModRoute[];
+  ranges: ParamRanges;
+}
+
+// Минимальная форма UI-схемы формулы, нужная для поиска диапазонов.
+export interface FormulaRanges {
+  id: string;
+  sliders: readonly { k: string; min: number; max: number }[];
+}
+
+export function buildModPayload(
+  mod: ModState | null,
+  formula: string,
+  formulas: readonly FormulaRanges[],
+): ModPayload {
+  if (!mod) return { lfos: [], routes: [], ranges: {} };
+  const routes = mod.routes.filter((r) => r.formula === formula);
+  const ranges: ParamRanges = {};
+  const def = formulas.find((f) => f.id === formula);
+  if (def) {
+    for (const r of routes) {
+      const s = def.sliders.find((sl) => sl.k === r.param);
+      if (s) ranges[r.param] = [s.min, s.max];
+    }
+  }
+  return { lfos: mod.lfos, routes, ranges };
+}

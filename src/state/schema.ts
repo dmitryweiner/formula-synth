@@ -5,11 +5,14 @@ import type { Params } from '../dsp/generator';
 import { isFormulaId } from '../dsp/generator';
 import type { LfoDef, LfoShape, ModRoute, ModState } from '../dsp/mod';
 
-export type FilterType = 'lowpass' | 'highpass' | 'bandpass';
+export type FilterType =
+  | 'lowpass' | 'highpass' | 'bandpass' | 'notch' | 'peaking'
+  | 'lowshelf' | 'highshelf' | 'allpass' | 'formant' | 'comb';
 export type ChorusMode = 'chorus' | 'flanger';
 
 export interface FxState {
   filterOn: boolean; filterType: FilterType; filterFreq: number; filterQ: number;
+  filterGain: number; filterVowel: number; filterCombFb: number;
   chorusOn: boolean; chorusMode: ChorusMode; chorusRate: number; chorusDepth: number;
   chorusMix: number; chorusFb: number;
   reverbOn: boolean; reverbDecay: number; reverbMix: number;
@@ -52,6 +55,7 @@ export const DEFAULT_MASTER_GAIN = 0.25;
 
 export const DEFAULT_FX: Readonly<FxState> = {
   filterOn: false, filterType: 'lowpass', filterFreq: 1000, filterQ: 0.7,
+  filterGain: 0, filterVowel: 0, filterCombFb: 0.5,
   chorusOn: false, chorusMode: 'chorus', chorusRate: 0.35, chorusDepth: 6,
   chorusMix: 0.35, chorusFb: 0.15,
   reverbOn: false, reverbDecay: 2.8, reverbMix: 0.25,
@@ -75,7 +79,9 @@ function toParams(u: unknown): Params | undefined {
 }
 
 function isFilterType(v: unknown): v is FilterType {
-  return v === 'lowpass' || v === 'highpass' || v === 'bandpass';
+  return v === 'lowpass' || v === 'highpass' || v === 'bandpass'
+    || v === 'notch' || v === 'peaking' || v === 'lowshelf' || v === 'highshelf'
+    || v === 'allpass' || v === 'formant' || v === 'comb';
 }
 
 function isChorusMode(v: unknown): v is ChorusMode {
@@ -90,7 +96,8 @@ function sanitizeFx(u: unknown): Partial<FxState> | undefined {
     if (typeof u[k] === 'boolean') fx[k] = u[k] === true;
   }
   const numKeys = [
-    'filterFreq', 'filterQ', 'chorusRate', 'chorusDepth', 'chorusMix', 'chorusFb',
+    'filterFreq', 'filterQ', 'filterGain', 'filterVowel', 'filterCombFb',
+    'chorusRate', 'chorusDepth', 'chorusMix', 'chorusFb',
     'reverbDecay', 'reverbMix', 'limiterThr', 'limiterRel',
     'delayTime', 'delayFb', 'delayMix',
     'phaserRate', 'phaserDepth', 'phaserStages', 'phaserFb', 'phaserMix',

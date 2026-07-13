@@ -12,9 +12,12 @@ export const PRESETS: Preset[] = [
     name: 'Stillness meditation',
     state: {
       v: 3,
-      masterGain: 0.514,
+      masterGain: 0.75,
       fx: {
-        filterOn: true, filterType: 'lowpass', filterFreq: 3400, filterQ: 6.3,
+        // ...DEFAULT_FX бэкфиллит любые будущие поля FxState; ниже — курируемые
+        // значения этого пресета (перекрывают дефолты).
+        ...DEFAULT_FX,
+        filterOn: true, filterType: 'lowpass', filterFreq: 3400, filterQ: 6.3, filterGain: 0, filterVowel: 0, filterCombFb: 0.5,
         chorusOn: true, chorusMode: 'chorus', chorusRate: 0.01, chorusDepth: 8.4,
         chorusMix: 0.35, chorusFb: 0.95,
         reverbOn: true, reverbDecay: 3.2, reverbMix: 0.5,
@@ -36,9 +39,10 @@ export const PRESETS: Preset[] = [
     name: 'Waiting for the subway',
     state: {
       v: 3,
-      masterGain: 0.514,
+      masterGain: 0.75,
       fx: {
-        filterOn: true, filterType: 'lowpass', filterFreq: 2000, filterQ: 6.3,
+        ...DEFAULT_FX,
+        filterOn: true, filterType: 'lowpass', filterFreq: 2000, filterQ: 6.3, filterGain: 0, filterVowel: 0, filterCombFb: 0.5,
         chorusOn: true, chorusMode: 'flanger', chorusRate: 0.98, chorusDepth: 5.7,
         chorusMix: 0.68, chorusFb: 0.45,
         reverbOn: true, reverbDecay: 3.2, reverbMix: 1,
@@ -61,9 +65,10 @@ export const PRESETS: Preset[] = [
     name: 'Inside the nuclear power plant',
     state: {
       v: 3,
-      masterGain: 0.536,
+      masterGain: 0.75,
       fx: {
-        filterOn: true, filterType: 'lowpass', filterFreq: 2000, filterQ: 10.3,
+        ...DEFAULT_FX,
+        filterOn: true, filterType: 'lowpass', filterFreq: 2000, filterQ: 10.3, filterGain: 0, filterVowel: 0, filterCombFb: 0.5,
         chorusOn: true, chorusMode: 'flanger', chorusRate: 0.15, chorusDepth: 0.6,
         chorusMix: 0.28, chorusFb: 0.88,
         reverbOn: true, reverbDecay: 8, reverbMix: 0.36,
@@ -81,9 +86,10 @@ export const PRESETS: Preset[] = [
     name: 'Long journey on the helicopter',
     state: {
       v: 3,
-      masterGain: 0.585,
+      masterGain: 0.75,
       fx: {
-        filterOn: true, filterType: 'lowpass', filterFreq: 285, filterQ: 13.3,
+        ...DEFAULT_FX,
+        filterOn: true, filterType: 'lowpass', filterFreq: 285, filterQ: 13.3, filterGain: 0, filterVowel: 0, filterCombFb: 0.5,
         chorusOn: true, chorusMode: 'flanger', chorusRate: 0.13, chorusDepth: 1.2,
         chorusMix: 0.65, chorusFb: 0.8,
         reverbOn: false, reverbDecay: 5.5, reverbMix: 0.36,
@@ -106,9 +112,10 @@ export const PRESETS: Preset[] = [
     name: 'Abandoned shrine',
     state: {
       v: 3,
-      masterGain: 0.25,
+      masterGain: 0.75,
       fx: {
-        filterOn: true, filterType: 'lowpass', filterFreq: 2000, filterQ: 0.7,
+        ...DEFAULT_FX,
+        filterOn: true, filterType: 'lowpass', filterFreq: 2000, filterQ: 0.7, filterGain: 0, filterVowel: 0, filterCombFb: 0.5,
         chorusOn: true, chorusMode: 'chorus', chorusRate: 0.01, chorusDepth: 6.6,
         chorusMix: 0.35, chorusFb: 0.95,
         reverbOn: true, reverbDecay: 2.8, reverbMix: 0.25,
@@ -133,7 +140,7 @@ export const PRESETS: Preset[] = [
     name: 'Tidal drift (mod)',
     state: {
       v: 3,
-      masterGain: 0.4,
+      masterGain: 0.75,
       fx: {
         ...DEFAULT_FX,
         filterOn: true, filterType: 'lowpass', filterFreq: 1400, filterQ: 0.8,
@@ -162,7 +169,7 @@ export const PRESETS: Preset[] = [
     name: 'Generative bells (S&H)',
     state: {
       v: 3,
-      masterGain: 0.45,
+      masterGain: 0.75,
       fx: {
         ...DEFAULT_FX,
         reverbOn: true, reverbDecay: 5, reverbMix: 0.5,
@@ -191,7 +198,7 @@ export const PRESETS: Preset[] = [
     name: 'Aurora pad (mod)',
     state: {
       v: 3,
-      masterGain: 0.42,
+      masterGain: 0.75,
       fx: {
         ...DEFAULT_FX,
         filterOn: true, filterType: 'lowpass', filterFreq: 1800, filterQ: 0.7,
@@ -223,7 +230,7 @@ export const PRESETS: Preset[] = [
     name: 'Wandering Lorenz (mod)',
     state: {
       v: 3,
-      masterGain: 0.4,
+      masterGain: 0.75,
       fx: {
         ...DEFAULT_FX,
         filterOn: true, filterType: 'lowpass', filterFreq: 1600, filterQ: 0.9,
@@ -248,40 +255,12 @@ export const PRESETS: Preset[] = [
     },
   },
   {
-    // Аддитивный колокол Риссе в большом реверберберационном пространстве;
-    // медленный LFO уводит высоту звона в октавах — «соборные» колокола.
-    name: 'Cathedral bells (Risset)',
-    state: {
-      v: 3,
-      masterGain: 0.45,
-      fx: {
-        ...DEFAULT_FX,
-        reverbOn: true, reverbDecay: 6, reverbMix: 0.5,
-        delayOn: true, delayTime: 0.6, delayFb: 0.3, delayMix: 0.25,
-        limiterOn: true,
-      },
-      formulas: {
-        risset: { enabled: true, params: { gain: 0.42, rissF0: 360, rissDecay: 6, rissPeriod: 5 } },
-      },
-      mod: {
-        lfos: [
-          { shape: 'sine', rate: 0.03, phase: 0 },
-          { shape: 'sine', rate: 0.08, phase: 0.3 },
-          { shape: 'triangle', rate: 0.05, phase: 0 },
-        ],
-        routes: [
-          { src: 0, formula: 'risset', param: 'rissF0', depth: 0.15, exp: true },
-        ],
-      },
-    },
-  },
-  {
     // Капли в гулкой пещере: редкие резонансные «плинки», чья частота и
     // плотность медленно гуляют двумя LFO (как накаты у Ocean).
     name: 'Cave drips (mod)',
     state: {
       v: 3,
-      masterGain: 0.5,
+      masterGain: 0.75,
       fx: {
         ...DEFAULT_FX,
         filterOn: true, filterType: 'lowpass', filterFreq: 2400, filterQ: 0.7,
@@ -302,6 +281,55 @@ export const PRESETS: Preset[] = [
           { src: 0, formula: 'rain', param: 'rainDensity', depth: 0.3 },
           { src: 1, formula: 'rain', param: 'rainPitch', depth: 0.3, exp: true },
         ],
+      },
+    },
+  },
+  // --- Демо фильтров (phase: filters) ---
+  {
+    // Formant-фильтр на гармоническом паде: «гласная» окраска → хоровой,
+    // вокальный тембр; генератор медленно дрейфует высотой (LFO).
+    name: 'Vowel choir (formant)',
+    state: {
+      v: 3,
+      masterGain: 0.75,
+      fx: {
+        ...DEFAULT_FX,
+        filterOn: true, filterType: 'formant', filterVowel: 0.25, filterQ: 2, filterFreq: 1000,
+        reverbOn: true, reverbDecay: 3.8, reverbMix: 0.42,
+        limiterOn: true,
+      },
+      formulas: {
+        additive: { enabled: true, params: { gain: 0.28, fund: 130, N: 14, move: 0.3 } },
+      },
+      mod: {
+        lfos: [
+          { shape: 'sine', rate: 0.06, phase: 0 },
+          { shape: 'sine', rate: 0.1, phase: 0.3 },
+          { shape: 'triangle', rate: 0.04, phase: 0 },
+        ],
+        routes: [
+          { src: 0, formula: 'additive', param: 'fund', depth: 0.1, exp: true },
+          { src: 1, formula: 'additive', param: 'move', depth: 0.4 },
+        ],
+      },
+    },
+  },
+  {
+    // Морской шум сквозь медленный фленджер → воющий ветер / прибой с
+    // «гребёнчатыми» накатами. Статичный (океан уже дышит сам).
+    name: 'Wind flanger',
+    state: {
+      v: 3,
+      masterGain: 0.75,
+      fx: {
+        ...DEFAULT_FX,
+        filterOn: true, filterType: 'lowpass', filterFreq: 1200, filterQ: 0.7,
+        chorusOn: true, chorusMode: 'flanger', chorusRate: 0.08, chorusDepth: 6, chorusMix: 0.55, chorusFb: 0.75,
+        reverbOn: true, reverbDecay: 4, reverbMix: 0.4,
+        limiterOn: true,
+      },
+      formulas: {
+        ocean: { enabled: true, params: { gain: 0.5, oceanRate: 0.1, oceanCut: 700, oceanDepth: 0.8 } },
       },
     },
   },

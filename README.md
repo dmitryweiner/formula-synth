@@ -21,10 +21,14 @@ AudioWorklet skips the math), so leaving all cards visible costs nothing.
 ```bash
 npm install
 npm run dev            # Vite dev server on :5173
-npm test               # vitest unit tests (incl. golden-sample DSP tests)
+npm run check          # tsc + eslint + vitest in one command
+npm test               # vitest unit tests (incl. golden-sample DSP + audio-sanity)
 UPDATE_GOLDEN=1 npm test  # regenerate golden samples after intended DSP changes
 npm run lint           # eslint (no `as` casts allowed)
 npm run build          # tsc + build to ./docs (GitHub Pages)
+npm run smoke          # headless-Chromium smoke: every preset loads & plays, every
+                       # formula toggles — fails on any console error. Targeted:
+                       # npm run smoke -- --preset "Wind flanger" --play [--fx-preset "Jet flanger"] [--screenshot p]
 npm run shot           # headless-Chromium screenshots to ./shots + audio smoke test
 npm run shot -- --mobile --fx --preview   # mobile viewport, FX panel, prod build
 ```
@@ -32,7 +36,7 @@ npm run shot -- --mobile --fx --preview   # mobile viewport, FX panel, prod buil
 ### Architecture
 
 ```text
-src/dsp/generator.ts      pure DSP core: all 19 formulas, sample-by-sample,
+src/dsp/generator.ts      pure DSP core: all 21 formulas, sample-by-sample,
                           injectable RNG (deterministic in tests)
 src/dsp/gate.ts           per-generator fade-to-silence gate; when off, the
                           worklet skips computing samples entirely (CPU saving)
@@ -42,15 +46,19 @@ src/dsp/{wav,recorder}.ts WAV encoder (16-bit PCM), PCM chunk collector
 src/worklet/processors.ts AudioWorklet entries (generator + recorder) — thin
                           wrappers over the DSP core, bundled as a separate
                           chunk via Vite `?worker&url`
-src/audio/engine.ts       Web Audio graph: mix bus, FX chain, recording; sends
-                          each generator its modulation routes + LFO pool
+src/audio/engine.ts       Web Audio graph: mix bus, FX chain (multi-mode filter:
+                          biquad/formant/comb), recording; sends each generator
+                          its modulation routes + LFO pool
+src/audio/{filters,modrouting}.ts  pure filter math (vowel/mode) + mod-payload
+                          builder — extracted from engine so they're unit-tested
 src/state/…               state schema (v3, incl. mod), base64url share links,
                           user presets
 src/ui/…                  scope/spectrogram, +/- buttons, wake lock, DOM helpers,
                           modulation matrix panel (modmatrix.ts)
 src/main.ts               UI assembly and wiring
 src/formulas.ts           UI schema: titles, descriptions, slider ranges
-src/presets.ts            built-in presets
+src/presets.ts            built-in full-app presets
+src/fxPresets.ts          per-effect-module presets ("Effects preset" menu)
 ```
 
 ### Audio Graph
@@ -131,12 +139,24 @@ The effects panel opens with the 🎛 button. Each effect is enabled with an "ON
 
 | Effect | Parameters |
 |--------|------------|
-| **Filter (Biquad)** | type (low/high/band-pass), cutoff 20–2000 Hz, Q 0.1–30 |
+| **Filter (multi-mode)** | Biquad types (low/high/band-pass, notch, peaking, low/high-shelf, all-pass) + **Formant** (vowel A→U morph) + **Comb** (feedback resonator). Controls adapt to the type: cutoff/pitch/shift, Q/resonance, gain (dB), vowel, feedback |
 | **Chorus / Flanger** | mode (base 12 ms / 2 ms), rate 0.01–8 Hz, depth 0–20 ms, mix, feedback 0–0.95 |
 | **Reverb (Convolver)** | procedural impulse response; decay 0.1–8 s, mix |
 | **Limiter** | compressor with ratio 20; threshold −40–0 dB, release 0.02–1 s |
 | **Delay / Echo** | time 0.05–2 s, feedback 0–0.9, mix |
 | **Phaser** | all-pass chain; rate 0.1–10 Hz, depth 0–1, stages 2–8, feedback 0–0.9, mix |
+
+The **Filter** is multi-mode: the eight native biquad responses, a **Formant**
+(vowel) filter — three parallel band-pass resonators on vowel formants, morphed
+A→E→I→O→U — and a **Comb** feedback resonator (tuned metallic resonance). Only
+the controls relevant to the selected type are shown. An **Effects preset** menu
+at the top of the effects panel offers per-module starting points, grouped by
+effect — **Filter** (Telephone, Vowel "ah"/"ooh", Metallic comb, Underwater,
+Presence…), **Flanger** (Jet / Slow / Subtle), and **Phaser** (Deep / Fast /
+Swirl +delay). Each sets just its own effect module (over your current sound) and
+switches it on; picking one shows it selected until you tweak the effects by hand.
+Full-app demo presets that feature the effects: **Vowel choir (formant)** (filter)
+and **Wind flanger** (ocean through a slow flanger).
 
 ---
 
@@ -167,8 +187,7 @@ Demo presets: **Tidal drift (mod)** (periodic LFOs drifting an FM tone),
 **Generative bells (S&H)** (a random LFO stepping bell pitch on each strike),
 **Aurora pad (mod)** (an additive pad with a drifting fundamental and breathing
 harmonics), **Wandering Lorenz (mod)** (chaos with a slowly drifting pitch
-centre), **Cathedral bells (Risset)** (additive bells whose pitch drifts in
-octaves), and **Cave drips (mod)** (rain drops whose rate and pitch slowly
+centre), and **Cave drips (mod)** (rain drops whose rate and pitch slowly
 wander).
 
 ---
@@ -176,8 +195,9 @@ wander).
 ## UI
 
 - **Top bar**: Play/Stop, Record (WAV), presets dropdown (built-in + user
-  presets with delete), Save preset, Share, 📊 scope toggle, 🎛 effects
-  panel, ∿ modulation panel, ? help popup (auto-shows on first visit).
+  presets with delete), Save preset, Share, and labelled toggle buttons
+  (📊 Scope / 🎛 Effects / ∿ Mod — filled when the panel is open), ? help
+  popup (auto-shows on first visit).
 - **Auto-start**: enabling any formula starts audio automatically.
 - **Oscilloscope / Spectrogram**: Wave/Spectrum toggle; spectrogram is a
   scrolling waterfall with a logarithmic frequency scale (20 Hz–10 kHz),

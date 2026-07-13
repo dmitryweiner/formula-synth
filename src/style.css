@@ -118,6 +118,38 @@ button:disabled { opacity: .5; cursor: not-allowed; }
   border-color: var(--accent-active);
 }
 
+/* Кнопки-переключатели панелей: иконка + подпись, явная заливка при вкл */
+.panelToggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.panelToggle .ptIcon { font-size: 15px; line-height: 1; }
+.panelToggle .ptLabel { font-size: 13px; }
+/* Выключено — «призрачный» контур */
+.panelToggle {
+  background: transparent;
+  border-color: var(--accent-active);
+  color: var(--text-dim);
+}
+.panelToggle:hover { background: var(--accent); color: var(--text); }
+/* Включено — сплошная акцентная заливка + светлый текст + точка-индикатор */
+.panelToggle.active {
+  background: var(--accent-active);
+  border-color: var(--link);
+  color: #fff;
+  box-shadow: 0 0 0 1px var(--link) inset;
+}
+.panelToggle.active .ptLabel::after {
+  content: " ●";
+  color: var(--green-hover);
+  font-size: 9px;
+  vertical-align: middle;
+}
+@media (max-width: 600px) {
+  .panelToggle .ptLabel { font-size: 12px; }
+}
+
 .topgrid { margin-top: 10px; }
 
 /* ---------- Осциллограф ---------- */
@@ -202,6 +234,19 @@ select {
   max-height: 60vh;
   overflow-y: auto;
 }
+.filterPresetBar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--border);
+}
+.filterPresetBar label { color: var(--text-heading); font-size: 13px; font-weight: 600; }
+.filterPresetBar select { flex: 1 1 220px; max-width: 340px; }
+.filterPresetHint { color: var(--text-muted); }
+
 .effectsGrid {
   display: grid;
   grid-template-columns: 1fr 1fr;

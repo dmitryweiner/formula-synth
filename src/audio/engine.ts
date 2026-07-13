@@ -12,7 +12,10 @@ import workletUrl from '../worklet/processors.ts?worker&url';
 import { FORMULAS } from '../formulas';
 import type { FxState } from '../state/schema';
 import type { Params } from '../dsp/generator';
-import type { LfoDef, ModRoute, ModState, ParamRanges } from '../dsp/mod';
+import type { ModState } from '../dsp/mod';
+import { clampNum, filterMode, toBiquadType, vowelFormants } from './filters';
+import { buildModPayload } from './modrouting';
+import type { ModPayload } from './modrouting';
 
 export interface FormulaSetting {
   enabled: boolean;
@@ -24,14 +27,6 @@ export interface EngineState {
   fx: FxState;
   formulas: Record<string, FormulaSetting>;
   mod?: ModState;
-}
-
-// Пейлоуд модуляции для одной ноды: полный пул LFO, только нацеленные на эту
-// формулу маршруты и диапазоны затронутых параметров.
-interface ModPayload {
-  lfos: LfoDef[];
-  routes: ModRoute[];
-  ranges: ParamRanges;
 }
 
 interface FormulaNodes {
@@ -64,6 +59,13 @@ export class AudioEngine {
   private master!: GainNode;
 
   private filterNode!: BiquadFilterNode;
+  // Formant: 3 параллельных band-pass → усиление → сумма. Comb: задержка с ОС.
+  private formantBands: BiquadFilterNode[] = [];
+  private formantGains: GainNode[] = [];
+  private formantSum!: GainNode;
+  private combInput!: GainNode;
+  private combDelay!: DelayNode;
+  private combFb!: GainNode;
 
   private chorusDelay!: DelayNode;
   private chorusLFO!: OscillatorNode;
@@ -139,6 +141,18 @@ export class AudioEngine {
     this.mixBus.gain.value = 1;
 
     this.filterNode = ctx.createBiquadFilter();
+    this.formantBands = [];
+    this.formantGains = [];
+    this.formantSum = ctx.createGain();
+    for (let i = 0; i < 3; i++) {
+      const band = ctx.createBiquadFilter();
+      band.type = 'bandpass';
+      this.formantBands.push(band);
+      this.formantGains.push(ctx.createGain());
+    }
+    this.combInput = ctx.createGain();
+    this.combDelay = ctx.createDelay(0.05);
+    this.combFb = ctx.createGain();
 
     this.chorusDelay = ctx.createDelay(0.2);
     this.chorusDry = ctx.createGain();
@@ -261,6 +275,10 @@ export class AudioEngine {
 
     this.mixBus.disconnect();
     this.filterNode.disconnect();
+    for (const b of this.formantBands) b.disconnect();
+    for (const g of this.formantGains) g.disconnect();
+    this.formantSum.disconnect();
+    this.combInput.disconnect(); this.combDelay.disconnect(); this.combFb.disconnect();
 
     this.chorusDry.disconnect(); this.chorusWet.disconnect();
     this.chorusDelay.disconnect(); this.chorusFb.disconnect();
@@ -288,8 +306,24 @@ export class AudioEngine {
     let node: AudioNode = this.mixBus;
 
     if (fx.filterOn) {
-      node.connect(this.filterNode);
-      node = this.filterNode;
+      const mode = filterMode(fx.filterType);
+      if (mode === 'formant') {
+        for (let i = 0; i < this.formantBands.length; i++) {
+          node.connect(this.formantBands[i]);
+          this.formantBands[i].connect(this.formantGains[i]);
+          this.formantGains[i].connect(this.formantSum);
+        }
+        node = this.formantSum;
+      } else if (mode === 'comb') {
+        node.connect(this.combInput);
+        this.combInput.connect(this.combDelay);
+        this.combDelay.connect(this.combFb);
+        this.combFb.connect(this.combInput);
+        node = this.combDelay;
+      } else {
+        node.connect(this.filterNode);
+        node = this.filterNode;
+      }
     }
 
     if (fx.chorusOn) {
@@ -367,9 +401,26 @@ export class AudioEngine {
     if (!ctx) return;
     const now = ctx.currentTime;
 
-    this.filterNode.type = fx.filterType;
-    this.filterNode.frequency.setValueAtTime(fx.filterFreq, now);
-    this.filterNode.Q.setValueAtTime(fx.filterQ, now);
+    const fmode = filterMode(fx.filterType);
+    if (fmode === 'biquad') {
+      this.filterNode.type = toBiquadType(fx.filterType);
+      this.filterNode.frequency.setValueAtTime(clampNum(fx.filterFreq, 20, 20000), now);
+      this.filterNode.Q.setValueAtTime(fx.filterQ, now);
+      this.filterNode.gain.setValueAtTime(fx.filterGain, now); // действует лишь для peaking/shelf
+    } else if (fmode === 'formant') {
+      const { f, a } = vowelFormants(fx.filterVowel);
+      const scale = clampNum(fx.filterFreq, 200, 4000) / 1000; // Freq как сдвиг формант
+      const q = clampNum(fx.filterQ * 6, 4, 28);
+      for (let i = 0; i < this.formantBands.length; i++) {
+        this.formantBands[i].frequency.setValueAtTime(clampNum(f[i] * scale, 50, 8000), now);
+        this.formantBands[i].Q.setValueAtTime(q, now);
+        this.formantGains[i].gain.setValueAtTime(a[i], now);
+      }
+    } else {
+      const freq = clampNum(fx.filterFreq, 20, 2000);
+      this.combDelay.delayTime.setValueAtTime(1 / freq, now);
+      this.combFb.gain.setValueAtTime(clampNum(fx.filterCombFb, 0, 0.95), now);
+    }
 
     const baseMs = fx.chorusMode === 'flanger' ? 2.0 : 12.0;
     this.chorusDelay.delayTime.setValueAtTime(baseMs / 1000, now);
@@ -436,21 +487,10 @@ export class AudioEngine {
     this.nodes.get(id)?.aw.port.postMessage({ type: 'reset' });
   }
 
-  // Собирает пейлоуд модуляции для формулы: маршруты фильтруются по приёмнику,
-  // диапазоны берутся из UI-схемы (formulas.ts) — ядру передаём только нужное.
+  // Пейлоуд модуляции для формулы (маршруты по приёмнику + диапазоны из
+  // UI-схемы) — чистая логика в modrouting.ts, здесь только источник состояния.
   private modPayloadFor(formula: string): ModPayload {
-    const mod = this.modState;
-    if (!mod) return { lfos: [], routes: [], ranges: {} };
-    const routes = mod.routes.filter((r) => r.formula === formula);
-    const ranges: ParamRanges = {};
-    const def = FORMULAS.find((f) => f.id === formula);
-    if (def) {
-      for (const r of routes) {
-        const s = def.sliders.find((sl) => sl.k === r.param);
-        if (s) ranges[r.param] = [s.min, s.max];
-      }
-    }
-    return { lfos: mod.lfos, routes, ranges };
+    return buildModPayload(this.modState, formula, FORMULAS);
   }
 
   private pushMod(id: string): void {

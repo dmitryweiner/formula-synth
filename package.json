@@ -10,7 +10,9 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "lint": "eslint .",
-    "shot": "node scripts/shot.mjs"
+    "check": "tsc --noEmit && eslint . && vitest run",
+    "shot": "node scripts/shot.mjs",
+    "smoke": "node scripts/smoke.mjs"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",

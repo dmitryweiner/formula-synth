@@ -78,7 +78,7 @@ describe('sanitizeState', () => {
   it('отбрасывает мусорные поля и неверные типы', () => {
     const st = sanitizeState({
       masterGain: 'loud', // не число — отброс
-      fx: { filterOn: 1, filterType: 'notch', filterFreq: 500, reverbMix: NaN },
+      fx: { filterOn: 1, filterType: 'wobble', filterFreq: 500, reverbMix: NaN },
       formulas: { fm: { enabled: 'yes', params: { fc: 440, bad: 'x' } }, junk: 42 },
       scopeCollapsed: true,
     });

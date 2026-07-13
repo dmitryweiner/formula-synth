@@ -1,0 +1,34 @@
+// Пресеты модулей эффектов — быстрые заготовки для одного модуля цепочки FX
+// (фильтр / фленджер / фейзер / …). Меню «Effects preset» в панели эффектов.
+// Каждый пресет трогает ТОЛЬКО свои поля FxState (частичный набор) поверх
+// текущего состояния — не влияет на генераторы, мастер и модуляцию, не в URL.
+import type { FxState } from './state/schema';
+
+export interface FxPreset {
+  name: string;
+  group: string; // для <optgroup>: 'Filter' | 'Flanger' | 'Phaser'
+  fx: Partial<FxState>;
+}
+
+export const FX_PRESETS: readonly FxPreset[] = [
+  // --- Filter (ставят поля фильтра + включают его) ---
+  { name: 'Warm low-pass', group: 'Filter', fx: { filterOn: true, filterType: 'lowpass', filterFreq: 900, filterQ: 1.2 } },
+  { name: 'Underwater', group: 'Filter', fx: { filterOn: true, filterType: 'lowpass', filterFreq: 350, filterQ: 6 } },
+  { name: 'Telephone', group: 'Filter', fx: { filterOn: true, filterType: 'bandpass', filterFreq: 1200, filterQ: 8 } },
+  { name: 'Radio', group: 'Filter', fx: { filterOn: true, filterType: 'bandpass', filterFreq: 1800, filterQ: 3.5 } },
+  { name: 'Vowel "ah"', group: 'Filter', fx: { filterOn: true, filterType: 'formant', filterVowel: 0, filterQ: 3, filterFreq: 1000 } },
+  { name: 'Vowel "ooh"', group: 'Filter', fx: { filterOn: true, filterType: 'formant', filterVowel: 1, filterQ: 3, filterFreq: 1000 } },
+  { name: 'Metallic comb', group: 'Filter', fx: { filterOn: true, filterType: 'comb', filterFreq: 220, filterCombFb: 0.85 } },
+  { name: 'Presence (air)', group: 'Filter', fx: { filterOn: true, filterType: 'highshelf', filterFreq: 2000, filterQ: 0.7, filterGain: 8 } },
+  { name: 'Hollow notch', group: 'Filter', fx: { filterOn: true, filterType: 'notch', filterFreq: 900, filterQ: 5 } },
+
+  // --- Flanger (модуль Chorus в режиме flanger) ---
+  { name: 'Jet flanger', group: 'Flanger', fx: { chorusOn: true, chorusMode: 'flanger', chorusRate: 0.15, chorusDepth: 4, chorusMix: 0.6, chorusFb: 0.85 } },
+  { name: 'Slow flanger', group: 'Flanger', fx: { chorusOn: true, chorusMode: 'flanger', chorusRate: 0.08, chorusDepth: 6, chorusMix: 0.55, chorusFb: 0.75 } },
+  { name: 'Subtle flanger', group: 'Flanger', fx: { chorusOn: true, chorusMode: 'flanger', chorusRate: 0.3, chorusDepth: 2, chorusMix: 0.4, chorusFb: 0.4 } },
+
+  // --- Phaser ---
+  { name: 'Deep phaser', group: 'Phaser', fx: { phaserOn: true, phaserRate: 0.12, phaserDepth: 0.8, phaserStages: 8, phaserFb: 0.6, phaserMix: 0.6 } },
+  { name: 'Fast phaser', group: 'Phaser', fx: { phaserOn: true, phaserRate: 0.8, phaserDepth: 0.7, phaserStages: 4, phaserFb: 0.4, phaserMix: 0.5 } },
+  { name: 'Phaser swirl (+delay)', group: 'Phaser', fx: { phaserOn: true, phaserRate: 0.3, phaserDepth: 0.7, phaserStages: 6, phaserFb: 0.5, phaserMix: 0.5, delayOn: true, delayTime: 0.5, delayFb: 0.45, delayMix: 0.3 } },
+];
