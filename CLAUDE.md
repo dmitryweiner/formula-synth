@@ -65,6 +65,9 @@ src/audio/filters.ts   ЧИСТАЯ математика фильтра (filterM
                        vowelFormants/clampNum) — вынесена из engine, тестируется
 src/audio/modrouting.ts  ЧИСТАЯ сборка mod-пейлоуда (buildModPayload) — тоже
                        вынесена из engine ради unit-тестов
+src/audio/iosUnlock.ts  iOS-unlock переключателя «без звука»: silentWavDataUri
+                       (чистая, тестируется) + IosAudioUnlock (зацикленный
+                       беззвучный <audio>). Вызывается из startAudio/stopAudio
 src/state/schema.ts    AppState v3 (+ mod?: ModState) + DEFAULT_FX +
                        sanitizeState (терпимый разбор unknown-JSON без as-кастов)
 src/state/share.ts     base64url токены #s=… (совместимость со старым деплоем
@@ -90,7 +93,7 @@ tests/…                golden-семплы (tests/golden/formulas.json + mod.j
                        матрица модуляции (mod.test.ts), сериализация, WAV, пресеты;
                        audio-sanity.test.ts (каждый генератор/пресет — не тишина,
                        конечен, не разносит); engine-pure.test.ts (filters +
-                       modrouting)
+                       modrouting); iosunlock.test.ts (silentWavDataUri)
 scripts/smoke.mjs      переиспользуемый браузерный смоук (npm run smoke): все
                        пресеты/формулы; флаги --preset/--panel/--fx-preset/--enable/
                        --hash/--url/--screenshot/--play/--preview
@@ -141,7 +144,16 @@ scripts/shot.mjs       playwright-скриншоты + аудио-смоук
 - Воркалет в dev-режиме грузится как ES-модуль с импортами — это работает
   в Chromium (dev/скриншоты), прод-сборка самодостаточна для всех браузеров.
 - iOS: после создания AudioContext всегда resume() (autoplay policy);
-  wake lock перезапрашивается на visibilitychange.
+  wake lock перезапрашивается на visibilitychange. Плюс unlock от аппаратного
+  переключателя «без звука» (Ring/Silent), который иначе глушит Web Audio:
+  src/audio/iosUnlock.ts проигрывает зацикленный беззвучный `<audio>` (data-URI
+  через encodeWAV, не muted — иначе категория сессии не сменится), чем переводит
+  аудиосессию на медиа-канал. `iosUnlock.play()` вызывается СИНХРОННО первым
+  делом в startAudio() (до await engine.start), иначе жест теряется и приём не
+  срабатывает; stop() — в stopAudio(). Приём не 100%-надёжен (ограничение
+  платформы: в вебе нет AVAudioSession), но закрывает массовый кейс. Чистая
+  часть (silentWavDataUri) покрыта tests/iosunlock.test.ts; DOM-обёртку проверяет
+  npm run smoke.
 
 ## Сделано в ревизии визуала/перфа (согласовано с пользователем)
 
@@ -153,7 +165,7 @@ scripts/shot.mjs       playwright-скриншоты + аудио-смоук
 - Выключенные генераторы не считаются (gate.ts, см. выше).
 - Добавлены bytebeat / bell / ocean / risset / rain.
 - Матрица модуляции (топбар: ∿) — панель Modulators + таблица маршрутов;
-  индикатор ∿ на «живых» слайдерах. Демо-пресеты с LFO: «Tidal drift (mod)»,
+  индикатор ∿ на «живых» слайдерах. Демо-пресеты с LFO: «Whale talks (mod)»,
   «Generative bells (S&H)», «Aurora pad (mod)», «Wandering Lorenz (mod)»,
   «Cave drips (mod)», «Vowel choir (formant)». Полный план — MODULATION.md.
 - Пресеты фленджера/фейзера — это пресеты МОДУЛЯ (src/fxPresets.ts, меню

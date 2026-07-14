@@ -183,7 +183,7 @@ function of absolute time, so all generators stay perfectly in sync without any
 cross-thread messaging. Currently only **generator** parameters are modulated
 (effects are not, yet).
 
-Demo presets: **Tidal drift (mod)** (periodic LFOs drifting an FM tone),
+Demo presets: **Whale talks (mod)** (periodic LFOs drifting an FM tone),
 **Generative bells (S&H)** (a random LFO stepping bell pitch on each strike),
 **Aurora pad (mod)** (an additive pad with a drifting fundamental and breathing
 harmonics), **Wandering Lorenz (mod)** (chaos with a slowly drifting pitch

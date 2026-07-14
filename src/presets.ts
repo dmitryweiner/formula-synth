@@ -137,7 +137,7 @@ export const PRESETS: Preset[] = [
   // --- Демо матрицы модуляции (phase 5) ---
   {
     // Периодические LFO: медленный дрейф высоты (в октавах) + «дыхание» тембра.
-    name: 'Tidal drift (mod)',
+    name: 'Whale talks (mod)',
     state: {
       v: 3,
       masterGain: 0.75,
@@ -207,7 +207,7 @@ export const PRESETS: Preset[] = [
         limiterOn: true,
       },
       formulas: {
-        additive: { enabled: true, params: { gain: 0.2, fund: 82, N: 16, move: 0.3 } },
+        additive: { enabled: true, params: { gain: 0.75, fund: 82, N: 16, move: 0.3 } },
       },
       mod: {
         lfos: [
@@ -239,7 +239,7 @@ export const PRESETS: Preset[] = [
         limiterOn: true,
       },
       formulas: {
-        lorenz: { enabled: true, params: { gain: 0.14, sigma: 10, rho: 28, beta: 2.6667, lBase: 120, lFreqScale: 40, lAmp: 0.25 } },
+        lorenz: { enabled: true, params: { gain: 0.75, sigma: 10, rho: 28, beta: 2.6667, lBase: 120, lFreqScale: 40, lAmp: 0.25 } },
       },
       mod: {
         lfos: [

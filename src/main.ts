@@ -3,6 +3,7 @@
 import { FORMULAS } from './formulas';
 import { PRESETS } from './presets';
 import { AudioEngine } from './audio/engine';
+import { IosAudioUnlock } from './audio/iosUnlock';
 import { encodeWAV } from './dsp/wav';
 import type { AppState, FxState, FilterType, PartialAppState } from './state/schema';
 import type { ModState } from './dsp/mod';
@@ -21,6 +22,7 @@ import { acquireWakeLock, releaseWakeLock } from './ui/wakelock';
 const HELP_SHOWN_KEY = 'formula_audio_lab_help_shown';
 
 const engine = new AudioEngine();
+const iosUnlock = new IosAudioUnlock();
 const formulasRoot = el('formulas');
 const statusEl = el('status');
 
@@ -355,6 +357,9 @@ const recBtn = buttonEl('recBtn');
 
 async function startAudio(): Promise<void> {
   if (engine.running) return;
+  // iOS: беззвучный <audio> должен стартовать СИНХРОННО в жесте (до первого
+  // await), иначе переключатель «без звука» заглушит Web Audio. См. iosUnlock.ts.
+  iosUnlock.play();
   await engine.start(readStateFromUI());
   setStatus('running');
   playStopBtn.textContent = '⏹ Stop';
@@ -375,6 +380,7 @@ async function stopAudio(): Promise<void> {
     isRecording = false;
   }
   scope.stop();
+  iosUnlock.stop();
   await engine.stop();
 
   setStatus('stopped');
