@@ -475,4 +475,174 @@ export const PRESETS: Preset[] = [
       },
     },
   },
+  {
+    // «Переливающиеся ленты»: жирный дрон (пила из 26 гармоник + расстроенная
+    // пара на 49 Гц) и две «ленты» поверх — quasi (плавно блуждающий по высоте
+    // голос) и pm (водянистое мерцание). Их высоты качают РАЗНЫЕ медленные LFO
+    // в противофазе — ленты плетутся навстречу и перекрещиваются. Переливание
+    // красок — peaking-фильтр: он НЕ режет жир (пропускает весь спектр), а
+    // водит по дрону светящуюся полосу +10 dB, у которой дышит и яркость
+    // (filterGain). Хорус утолщает, медленный 8-звенный фейзер лакирует,
+    // S&H раз в ~32 с меняет характер блуждания ленты (quasi.wq) и внутреннее
+    // движение гармоник. Частоты LFO взаимно иррациональны — узор не
+    // повторяется. Всё ≤0.06 Гц, лента сплошная: peaking не глушит в ноль.
+    name: 'Iridescent ribbons (FX mod)',
+    state: {
+      v: 3,
+      masterGain: 0.72,
+      fx: {
+        ...DEFAULT_FX,
+        filterOn: true, filterType: 'peaking', filterFreq: 800, filterQ: 4, filterGain: 8,
+        chorusOn: true, chorusMode: 'chorus', chorusRate: 0.07, chorusDepth: 10, chorusMix: 0.45, chorusFb: 0.3,
+        phaserOn: true, phaserRate: 0.15, phaserDepth: 0.6, phaserStages: 8, phaserFb: 0.4, phaserMix: 0.4,
+        delayOn: true, delayTime: 1.1, delayFb: 0.45, delayMix: 0.3,
+        reverbOn: true, reverbDecay: 6, reverbMix: 0.4,
+        limiterOn: true,
+      },
+      formulas: {
+        additive: { enabled: true, params: { gain: 0.55, fund: 49, N: 26, move: 0.25 } },
+        beats: { enabled: true, params: { gain: 0.32, fbeat: 49, df: 0.5 } },
+        quasi: { enabled: true, params: { gain: 0.13, fq: 200, Aq: 130, wq: 0.3 } },
+        pm: { enabled: true, params: { gain: 0.1, f: 220, f2pm: 0.3 } },
+      },
+      mod: {
+        lfos: [
+          { shape: 'sine', rate: 0.023, phase: 0 },
+          { shape: 'triangle', rate: 0.041, phase: 0.5 },
+          { shape: 'sine', rate: 0.059, phase: 0.25 },
+          { shape: 'random', rate: 0.031, phase: 0 },
+        ],
+        routes: [
+          // Светящаяся полоса peaking скользит по дрону (~130…2000 Гц) и
+          // дышит яркостью; жир не страдает — peaking пропускает весь спектр.
+          { src: 0, formula: 'fx', param: 'filterFreq', depth: 0.4, exp: true },
+          { src: 1, formula: 'fx', param: 'filterGain', depth: 0.2 },
+          // Ленты: высоты quasi и pm качаются разными LFO — плетутся навстречу.
+          { src: 1, formula: 'quasi', param: 'fq', depth: 0.15, exp: true },
+          { src: 2, formula: 'pm', param: 'f', depth: 0.1, exp: true },
+          { src: 2, formula: 'fx', param: 'chorusDepth', depth: 0.35 },
+          { src: 0, formula: 'fx', param: 'reverbMix', depth: 0.3 },
+          // S&H: характер блуждания ленты и внутренняя жизнь дрона.
+          { src: 3, formula: 'quasi', param: 'wq', depth: 0.1 },
+          { src: 3, formula: 'additive', param: 'move', depth: 0.08 },
+          { src: 3, formula: 'fx', param: 'phaserFb', depth: 0.2 },
+        ],
+      },
+    },
+  },
+  {
+    // «Ткацкий станок»: пресет, РИСУЮЩИЙ узоры на спектрограмме. Основа — та
+    // же пульсирующая пряжа (пила 28 гармоник + биения на 55 Гц: красные
+    // «стежки» внизу водопада). Новые карандаши: FM-веера — LFO качает индекс
+    // модуляции, и боковые полосы (fc=440 ± n·55 — решётка, выровненная с
+    // дроном!) раскрываются и складываются веером; тон Шепарда тихой сеткой
+    // диагоналей ползёт сквозь весь спектр, причём S&H изредка МЕНЯЕТ ему
+    // направление (shepSpeed через ноль — сетка то восходит, то ниспадает);
+    // comb-фильтр — движущаяся гребёнка: её пики скользят поперёк гармоник
+    // дрона и ткут муар (feedback-comb, провалы мягкие — жир не страдает).
+    // Частоты LFO взаимно иррациональны, узор не повторяется. Лента сплошная.
+    name: 'Harmonic loom (FX mod)',
+    state: {
+      v: 3,
+      masterGain: 0.72,
+      fx: {
+        ...DEFAULT_FX,
+        filterOn: true, filterType: 'comb', filterFreq: 220, filterCombFb: 0.65,
+        chorusOn: true, chorusMode: 'chorus', chorusRate: 0.06, chorusDepth: 8, chorusMix: 0.4, chorusFb: 0.3,
+        phaserOn: true, phaserRate: 0.12, phaserDepth: 0.65, phaserStages: 8, phaserFb: 0.45, phaserMix: 0.45,
+        delayOn: true, delayTime: 0.8, delayFb: 0.4, delayMix: 0.25,
+        reverbOn: true, reverbDecay: 5.5, reverbMix: 0.35,
+        limiterOn: true,
+      },
+      formulas: {
+        additive: { enabled: true, params: { gain: 0.65, fund: 55, N: 28, move: 0.2 } },
+        beats: { enabled: true, params: { gain: 0.4, fbeat: 55, df: 0.6 } },
+        fm: { enabled: true, params: { gain: 0.16, fc: 440, fm: 55, I: 6 } },
+        shepard: { enabled: true, params: { gain: 0.09, shepBase: 60, shepSpeed: 0.03, shepOctaves: 7 } },
+      },
+      mod: {
+        lfos: [
+          { shape: 'sine', rate: 0.017, phase: 0 },
+          { shape: 'triangle', rate: 0.043, phase: 0.5 },
+          { shape: 'sine', rate: 0.061, phase: 0.25 },
+          { shape: 'random', rate: 0.027, phase: 0 },
+        ],
+        routes: [
+          // Гребёнка скользит (~80…600 Гц): пики comb пересекают решётку
+          // гармоник дрона — муар. Пол не 20 Гц: провалы comb неглубокие.
+          { src: 0, formula: 'fx', param: 'filterFreq', depth: 0.22, exp: true },
+          { src: 0, formula: 'fx', param: 'reverbMix', depth: 0.25 },
+          // Веера: индекс FM дышит 0…13 — боковые полосы раскрываются и
+          // складываются; центр веера медленно дрейфует на ±полоктавы.
+          { src: 1, formula: 'fm', param: 'I', depth: 0.35 },
+          { src: 1, formula: 'fx', param: 'filterCombFb', depth: 0.15 },
+          { src: 2, formula: 'fm', param: 'fc', depth: 0.08, exp: true },
+          { src: 2, formula: 'fx', param: 'chorusDepth', depth: 0.35 },
+          // S&H раз в ~37 с: сетка Шепарда меняет направление (через ноль),
+          // пряжа — скорость движения, эхо — длину хвоста.
+          { src: 3, formula: 'shepard', param: 'shepSpeed', depth: 0.1 },
+          { src: 3, formula: 'additive', param: 'move', depth: 0.08 },
+          { src: 3, formula: 'fx', param: 'delayFb', depth: 0.2 },
+        ],
+      },
+    },
+  },
+  {
+    // «Серебряное кружево»: тот же тканый стиль, что Harmonic loom, но на
+    // октаву выше, светлее и тоньше. ВСЁ сидит на гармонической решётке
+    // 110 Гц и НЕПРЕРЫВНО — без перкуссии. (Пробовали: колокол Риссе — его
+    // партиалы негармоничны по построению и трутся с дроном, в прозрачном
+    // регистре не маскируется; FM-колокол — гармоничен при ratio 2, но его
+    // мгновенная атака «бьёт» сквозь тонкую ткань.) Пряжа — пила 22 гармоник
+    // + лёгкие биения; FM-веер на 880 Гц дышит индексом; нить quasi мягко
+    // качается вокруг 440 Гц (4-я гармоника; фазовый аккумулятор — модуляция
+    // без разрывов). Peaking +6 dB бродит по верхней середине (жир не
+    // режется), 6-звенный фейзер выгибает арки, его скорость плывёт LFO —
+    // кривизна арок гуляет. S&H-цели только «ступенько-безопасные»: НЕ
+    // additive.move / rissF0 — их ступенька рвёт фазу (sin(2π·param·t)) и
+    // щёлкает; quasi.wq безопасен (шаг частоты через аккумулятор, не фазы).
+    // LFO взаимно иррациональны; лента сплошная (peaking ничего не глушит).
+    name: 'Silver lace (FX mod)',
+    state: {
+      v: 3,
+      masterGain: 0.72,
+      fx: {
+        ...DEFAULT_FX,
+        filterOn: true, filterType: 'peaking', filterFreq: 1400, filterQ: 2, filterGain: 6,
+        chorusOn: true, chorusMode: 'chorus', chorusRate: 0.08, chorusDepth: 6, chorusMix: 0.35, chorusFb: 0.25,
+        phaserOn: true, phaserRate: 0.18, phaserDepth: 0.55, phaserStages: 6, phaserFb: 0.3, phaserMix: 0.35,
+        delayOn: true, delayTime: 0.55, delayFb: 0.35, delayMix: 0.25,
+        reverbOn: true, reverbDecay: 5, reverbMix: 0.45,
+        limiterOn: true,
+      },
+      formulas: {
+        additive: { enabled: true, params: { gain: 0.58, fund: 110, N: 22, move: 0.3 } },
+        beats: { enabled: true, params: { gain: 0.3, fbeat: 110, df: 0.8 } },
+        fm: { enabled: true, params: { gain: 0.16, fc: 880, fm: 55, I: 4 } },
+        quasi: { enabled: true, params: { gain: 0.12, fq: 440, Aq: 60, wq: 0.4 } },
+      },
+      mod: {
+        lfos: [
+          { shape: 'sine', rate: 0.021, phase: 0 },
+          { shape: 'triangle', rate: 0.037, phase: 0.5 },
+          { shape: 'sine', rate: 0.053, phase: 0.25 },
+          { shape: 'random', rate: 0.033, phase: 0 },
+        ],
+        routes: [
+          // Глоу бродит ~280 Гц…2 кГц — подсвечивает то пряжу, то кружево.
+          { src: 0, formula: 'fx', param: 'filterFreq', depth: 0.35, exp: true },
+          { src: 0, formula: 'fx', param: 'reverbMix', depth: 0.25 },
+          // Веер FM дышит; глубина покачивания нити — в противофазе.
+          { src: 1, formula: 'fm', param: 'I', depth: 0.3 },
+          { src: 1, formula: 'quasi', param: 'Aq', depth: 0.05 },
+          // Кривизна арок фейзера плывёт; хорус утолщается и тает.
+          { src: 2, formula: 'fx', param: 'phaserRate', depth: 0.4, exp: true },
+          { src: 2, formula: 'fx', param: 'chorusDepth', depth: 0.3 },
+          // S&H раз в ~30 с: характер покачивания нити + хвост эха.
+          { src: 3, formula: 'quasi', param: 'wq', depth: 0.1 },
+          { src: 3, formula: 'fx', param: 'delayFb', depth: 0.15 },
+        ],
+      },
+    },
+  },
 ];
