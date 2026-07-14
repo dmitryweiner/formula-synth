@@ -441,6 +441,15 @@ main { padding: 14px; max-width: 1200px; margin: 0 auto; }
 }
 .preset-item:hover { background: var(--border); }
 .preset-item.selected { background: rgba(39, 174, 96, 0.15); }
+.preset-item-id {
+  min-width: 18px;
+  margin-right: 8px;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
 .preset-item-name {
   flex: 1;
   overflow: hidden;

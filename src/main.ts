@@ -680,10 +680,18 @@ function updateDropdownButtonText(): void {
   presetDropdownBtn.textContent = selectedPresetName ?? '— Presets —';
 }
 
-function addPresetItem(name: string, state: AppState, deletable: boolean): void {
+function addPresetItem(name: string, state: AppState, deletable: boolean, id?: number): void {
   const item = document.createElement('div');
   item.className = 'preset-item';
   if (selectedPresetName === name) item.classList.add('selected');
+
+  if (id !== undefined) {
+    // id = 1-based индекс встроенного пресета — он же работает в ?preset=N.
+    const idSpan = document.createElement('span');
+    idSpan.className = 'preset-item-id';
+    idSpan.textContent = String(id);
+    item.appendChild(idSpan);
+  }
 
   const nameSpan = document.createElement('span');
   nameSpan.className = 'preset-item-name';
@@ -725,7 +733,7 @@ function populatePresetDropdown(): void {
     label.className = 'preset-section-label';
     label.textContent = 'Built-in';
     presetDropdownMenu.appendChild(label);
-    for (const preset of PRESETS) addPresetItem(preset.name, preset.state, false);
+    PRESETS.forEach((preset, i) => { addPresetItem(preset.name, preset.state, false, i + 1); });
   }
 
   if (userPresets.length > 0) {

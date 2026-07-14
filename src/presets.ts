@@ -407,7 +407,10 @@ export const PRESETS: Preset[] = [
           { shape: 'random', rate: 0.08, phase: 0 },
         ],
         routes: [
-          { src: 0, formula: 'fx', param: 'filterFreq', depth: 0.9, exp: true },
+          // depth подобран так, чтобы ПОЛ свипа был ~92 Гц (не 20-герцовый
+          // кламп): LP ниже фундаменталов глушил бы всё в ноль, а «полёт»
+          // должен длиться непрерывной лентой. Потолок ~1.9 кГц сохранён.
+          { src: 0, formula: 'fx', param: 'filterFreq', depth: 0.33, exp: true },
           { src: 0, formula: 'fx', param: 'chorusDepth', depth: 0.4 },
           { src: 1, formula: 'fx', param: 'delayTime', depth: 0.4, exp: true },
           { src: 2, formula: 'fx', param: 'phaserRate', depth: 0.6, exp: true },
@@ -456,7 +459,10 @@ export const PRESETS: Preset[] = [
           { shape: 'random', rate: 0.029, phase: 0 },
         ],
         routes: [
-          { src: 0, formula: 'fx', param: 'filterFreq', depth: 0.8, exp: true },
+          // depth ограничен: пол свипа ~69 Гц (выше фундаментала 55 Гц) —
+          // дрон «дышит» фильтром, но никогда не затухает в ноль (сплошная
+          // лента звука). При 0.8 LFO клампил cutoff в 20 Гц → тишина.
+          { src: 0, formula: 'fx', param: 'filterFreq', depth: 0.32, exp: true },
           { src: 1, formula: 'fx', param: 'filterQ', depth: 0.5 },
           { src: 1, formula: 'beats', param: 'df', depth: 0.05 },
           { src: 2, formula: 'fx', param: 'chorusDepth', depth: 0.4 },
