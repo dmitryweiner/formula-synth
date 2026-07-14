@@ -5,7 +5,11 @@
 import type { FormulaId } from '../dsp/generator';
 import { isFormulaId } from '../dsp/generator';
 import type { LfoDef, LfoShape, ModRoute, ModState } from '../dsp/mod';
+import { FX_EXP_PARAMS, FX_MOD_PARAMS, FX_PARAM_LABELS, isFxModParam } from '../state/schema';
 import { fmt } from './format';
+
+// Сентинел-цель «модуль эффектов» в выпадашке приёмника (наравне с формулами).
+const FX_TARGET = 'fx';
 
 interface SliderInfo { k: string; name: string; min: number; max: number; step: number; value: number; }
 interface FormulaInfo { id: FormulaId; title: string; sliders: readonly SliderInfo[]; }
@@ -36,6 +40,7 @@ const DEFAULT_LFOS: readonly LfoDef[] = [
   { shape: 'sine', rate: 2, phase: 0 },
   { shape: 'sine', rate: 0.5, phase: 0 },
   { shape: 'sine', rate: 0.1, phase: 0 },
+  { shape: 'triangle', rate: 0.05, phase: 0 },
 ];
 
 function toShape(v: string): LfoShape {
@@ -123,11 +128,14 @@ export class ModMatrix {
     }));
     const routes: ModRoute[] = [];
     for (const row of Array.from(this.routesHost.children)) {
-      const formulaRaw = qSelect(row, '.mFormula').value;
-      if (!isFormulaId(formulaRaw)) continue;
+      const target = qSelect(row, '.mFormula').value;
+      let formula: FormulaId | typeof FX_TARGET;
+      if (target === FX_TARGET) formula = FX_TARGET;
+      else if (isFormulaId(target)) formula = target;
+      else continue;
       const route: ModRoute = {
         src: Number(qSelect(row, '.mSrc').value),
-        formula: formulaRaw,
+        formula,
         param: qSelect(row, '.mParam').value,
         depth: Number(qInput(row, '.mDepth').value),
       };
@@ -198,18 +206,20 @@ export class ModMatrix {
   }
 
   private updateAddState(): void {
-    const none = this.enabledFormulas().length === 0;
-    this.addBtn.disabled = none;
-    this.addBtn.title = none ? 'Enable a formula first' : '';
+    // Цель «Effects» доступна всегда, так что добавить маршрут можно и без
+    // включённых формул — кнопка активна безусловно.
+    this.addBtn.disabled = false;
+    this.addBtn.title = '';
   }
 
   // Опции = включённые формулы; плюс текущая цель роута, даже если она сейчас
-  // выключена (помечаем «(off)»), чтобы роут не осиротел и не потерялся.
+  // выключена (помечаем «(off)»), чтобы роут не осиротел и не потерялся; плюс
+  // всегда группа «Effects» (сентинел 'fx') для модуляции параметров эффектов.
   private populateFormulaOptions(fSel: HTMLSelectElement, currentId: string): void {
     const enabled = this.enabledFormulas();
     const ids = new Set<string>(enabled.map((f) => f.id));
     const list = [...enabled];
-    if (currentId && !ids.has(currentId)) {
+    if (currentId && currentId !== FX_TARGET && !ids.has(currentId)) {
       const target = this.formulas.find((f) => f.id === currentId);
       if (target) list.unshift(target);
     }
@@ -220,6 +230,13 @@ export class ModMatrix {
       o.textContent = ids.has(f.id) ? f.title : `${f.title} (off)`;
       fSel.appendChild(o);
     }
+    const fxGroup = document.createElement('optgroup');
+    fxGroup.label = 'Effects';
+    const fxo = document.createElement('option');
+    fxo.value = FX_TARGET;
+    fxo.textContent = 'Effects';
+    fxGroup.appendChild(fxo);
+    fSel.appendChild(fxGroup);
     if (currentId) fSel.value = currentId;
   }
 
@@ -241,7 +258,7 @@ export class ModMatrix {
     const depth = qInput(row, '.mDepth');
     const exp = qInput(row, '.mExp');
 
-    const formulaId = route ? route.formula : (this.enabledFormulas()[0]?.id ?? this.formulas[0].id);
+    const formulaId = route ? route.formula : (this.enabledFormulas()[0]?.id ?? FX_TARGET);
     this.populateFormulaOptions(fSel, formulaId);
     this.populateParams(formulaId, pSel, route?.param);
     src.value = String(route ? route.src : 0);
@@ -274,8 +291,17 @@ export class ModMatrix {
   }
 
   private populateParams(formulaId: string, pSel: HTMLSelectElement, selected?: string): void {
-    const f = this.formulas.find((x) => x.id === formulaId);
     pSel.innerHTML = '';
+    if (formulaId === FX_TARGET) {
+      for (const k of FX_MOD_PARAMS) {
+        const o = document.createElement('option');
+        o.value = k; o.textContent = FX_PARAM_LABELS[k];
+        pSel.appendChild(o);
+      }
+      if (selected !== undefined && isFxModParam(selected)) pSel.value = selected;
+      return;
+    }
+    const f = this.formulas.find((x) => x.id === formulaId);
     if (!f) return;
     for (const s of f.sliders) {
       const o = document.createElement('option');
@@ -285,8 +311,10 @@ export class ModMatrix {
     if (selected !== undefined && f.sliders.some((s) => s.k === selected)) pSel.value = selected;
   }
 
-  // Частотные слайдеры («… (Hz)») по умолчанию модулируются в октавах (exp).
+  // Частотные параметры по умолчанию модулируются в октавах (exp): у формул —
+  // слайдеры «… (Hz)», у эффектов — курируемый список FX_EXP_PARAMS.
   private freqDefault(formulaId: string, paramK: string): boolean {
+    if (formulaId === FX_TARGET) return FX_EXP_PARAMS.has(paramK);
     const s = this.formulas.find((x) => x.id === formulaId)?.sliders.find((sl) => sl.k === paramK);
     return s ? /\(hz\)/i.test(s.name) : false;
   }

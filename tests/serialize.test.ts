@@ -116,6 +116,24 @@ describe('sanitizeState', () => {
     expect(st?.mod?.routes).toEqual([{ src: 0, formula: 'fm', param: 'fc', depth: 0.5, exp: true }]);
   });
 
+  it('mod: FX-маршруты (formula==="fx") — годные по allowlist, битые отброшены', () => {
+    const st = sanitizeState({
+      mod: {
+        lfos: [{ shape: 'sine', rate: 1, phase: 0 }],
+        routes: [
+          { src: 0, formula: 'fx', param: 'filterFreq', depth: 0.5, exp: true }, // ок
+          { src: 0, formula: 'fx', param: 'phaserRate', depth: -0.3 }, // ок
+          { src: 0, formula: 'fx', param: 'reverbDecay', depth: 0.5 }, // не в allowlist — отброс
+          { src: 0, formula: 'fx', param: 'filterType', depth: 0.5 }, // дискретное — отброс
+        ],
+      },
+    });
+    expect(st?.mod?.routes).toEqual([
+      { src: 0, formula: 'fx', param: 'filterFreq', depth: 0.5, exp: true },
+      { src: 0, formula: 'fx', param: 'phaserRate', depth: -0.3 },
+    ]);
+  });
+
   it('mod: битый LFO рушит весь блок (позиционные индексы)', () => {
     const st = sanitizeState({
       mod: {

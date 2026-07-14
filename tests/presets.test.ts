@@ -3,6 +3,7 @@
 import { PRESETS } from '../src/presets';
 import { FORMULAS } from '../src/formulas';
 import { isFormulaId } from '../src/dsp/generator';
+import { isFxModParam } from '../src/state/schema';
 
 describe('встроенные пресеты', () => {
   it('имена уникальны и непусты', () => {
@@ -53,11 +54,16 @@ describe('встроенные пресеты', () => {
     for (const r of mod.routes) {
       expect(r.src, 'src в пределах пула').toBeGreaterThanOrEqual(0);
       expect(r.src).toBeLessThan(mod.lfos.length);
+      expect(r.depth).toBeGreaterThanOrEqual(-1);
+      expect(r.depth).toBeLessThanOrEqual(1);
+      if (r.formula === 'fx') {
+        // FX-маршрут: параметр строго по allowlist FX-полей.
+        expect(isFxModParam(r.param), `fx.${r.param}: не модулируемое FX-поле`).toBe(true);
+        continue;
+      }
       expect(isFormulaId(r.formula), `формула ${r.formula}`).toBe(true);
       const def = FORMULAS.find((f) => f.id === r.formula);
       expect(def?.sliders.some((s) => s.k === r.param), `${r.formula}.${r.param}: нет слайдера`).toBe(true);
-      expect(r.depth).toBeGreaterThanOrEqual(-1);
-      expect(r.depth).toBeLessThanOrEqual(1);
       // маршрут должен целиться во включённую формулу — иначе модуляции не слышно
       expect(p.state.formulas[r.formula]?.enabled, `${r.formula} должна быть включена`).toBe(true);
     }

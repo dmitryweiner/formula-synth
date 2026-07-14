@@ -65,6 +65,64 @@ export const DEFAULT_FX: Readonly<FxState> = {
   phaserFb: 0.3, phaserMix: 0.5,
 };
 
+// --- Модулируемые поля FX (allowlist для матрицы модуляции, цель 'fx') ---
+// Только «дружелюбные» гладкие числовые поля. Дискретные (filterType,
+// chorusMode, phaserStages) и дорогие (reverbDecay — пересчёт импульса)
+// намеренно исключены — их модуляция даёт скачки/щелчки. Ключи = поля FxState
+// (все — number), поэтому индексация FxState по FxModParam типобезопасна.
+export type FxModParam =
+  | 'filterFreq' | 'filterQ' | 'filterGain' | 'filterVowel' | 'filterCombFb'
+  | 'chorusRate' | 'chorusDepth' | 'chorusMix' | 'chorusFb'
+  | 'reverbMix'
+  | 'delayTime' | 'delayFb' | 'delayMix'
+  | 'phaserRate' | 'phaserDepth' | 'phaserFb' | 'phaserMix'
+  | 'limiterThr' | 'limiterRel';
+
+// Порядок = порядок в выпадашке параметров матрицы (по модулям цепочки FX).
+export const FX_MOD_PARAMS: readonly FxModParam[] = [
+  'filterFreq', 'filterQ', 'filterGain', 'filterVowel', 'filterCombFb',
+  'chorusRate', 'chorusDepth', 'chorusMix', 'chorusFb',
+  'delayTime', 'delayFb', 'delayMix',
+  'phaserRate', 'phaserDepth', 'phaserFb', 'phaserMix',
+  'reverbMix', 'limiterThr', 'limiterRel',
+];
+
+// Диапазоны = min/max слайдеров панели эффектов (index.html). Держим их в
+// данных: это и allowlist (что здесь — то модулируемо), и [min,max] для клампа.
+export const FX_PARAM_RANGES: Record<FxModParam, readonly [number, number]> = {
+  filterFreq: [20, 2000], filterQ: [0.1, 30], filterGain: [-24, 24],
+  filterVowel: [0, 1], filterCombFb: [0, 0.95],
+  chorusRate: [0.01, 8], chorusDepth: [0, 20], chorusMix: [0, 1], chorusFb: [0, 0.95],
+  reverbMix: [0, 1],
+  delayTime: [0.05, 2.0], delayFb: [0, 0.9], delayMix: [0, 1],
+  phaserRate: [0.1, 10], phaserDepth: [0, 1], phaserFb: [0, 0.9], phaserMix: [0, 1],
+  limiterThr: [-40, 0], limiterRel: [0.02, 1],
+};
+
+// Человекочитаемые подписи для UI матрицы (группа «Effects»).
+export const FX_PARAM_LABELS: Record<FxModParam, string> = {
+  filterFreq: 'Filter cutoff', filterQ: 'Filter Q', filterGain: 'Filter gain',
+  filterVowel: 'Filter vowel', filterCombFb: 'Comb feedback',
+  chorusRate: 'Chorus rate', chorusDepth: 'Chorus depth', chorusMix: 'Chorus mix',
+  chorusFb: 'Chorus feedback',
+  reverbMix: 'Reverb mix',
+  delayTime: 'Delay time', delayFb: 'Delay feedback', delayMix: 'Delay mix',
+  phaserRate: 'Phaser rate', phaserDepth: 'Phaser depth', phaserFb: 'Phaser feedback',
+  phaserMix: 'Phaser mix',
+  limiterThr: 'Limiter threshold', limiterRel: 'Limiter release',
+};
+
+// Частотоподобные поля модулируются в октавах (exp) по умолчанию.
+export const FX_EXP_PARAMS: ReadonlySet<string> = new Set<string>([
+  'filterFreq', 'chorusRate', 'delayTime', 'phaserRate',
+]);
+
+const FX_MOD_SET: ReadonlySet<string> = new Set<string>(FX_MOD_PARAMS);
+
+export function isFxModParam(k: string): k is FxModParam {
+  return FX_MOD_SET.has(k);
+}
+
 function isRecord(u: unknown): u is Record<string, unknown> {
   return typeof u === 'object' && u !== null;
 }
@@ -130,10 +188,20 @@ function sanitizeRoute(u: unknown, lfoCount: number): ModRoute | null {
   if (!isRecord(u)) return null;
   const { src, formula, param, depth, exp } = u;
   if (typeof src !== 'number' || !Number.isInteger(src) || src < 0 || src >= lfoCount) return null;
-  if (typeof formula !== 'string' || !isFormulaId(formula)) return null;
   if (typeof param !== 'string') return null;
   if (typeof depth !== 'number' || !Number.isFinite(depth)) return null;
-  const route: ModRoute = { src, formula, param, depth };
+  // Цель — генератор (param по слайдерам формулы — проверит buildModPayload) или
+  // 'fx' (param строго по allowlist FX-полей, иначе engine его не применит).
+  let target: ModRoute['formula'];
+  if (formula === 'fx') {
+    if (!isFxModParam(param)) return null;
+    target = 'fx';
+  } else if (typeof formula === 'string' && isFormulaId(formula)) {
+    target = formula;
+  } else {
+    return null;
+  }
+  const route: ModRoute = { src, formula: target, param, depth };
   if (typeof exp === 'boolean') route.exp = exp;
   return route;
 }

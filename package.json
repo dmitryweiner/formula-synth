@@ -12,7 +12,8 @@
     "lint": "eslint .",
     "check": "tsc --noEmit && eslint . && vitest run",
     "shot": "node scripts/shot.mjs",
-    "smoke": "node scripts/smoke.mjs"
+    "smoke": "node scripts/smoke.mjs",
+    "rec": "node scripts/rec.mjs"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",

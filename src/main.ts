@@ -9,7 +9,7 @@ import type { AppState, FxState, FilterType, PartialAppState } from './state/sch
 import type { ModState } from './dsp/mod';
 import { ModMatrix } from './ui/modmatrix';
 import { FX_PRESETS } from './fxPresets';
-import { DEFAULT_FX, DEFAULT_MASTER_GAIN } from './state/schema';
+import { DEFAULT_FX, DEFAULT_MASTER_GAIN, FX_MOD_PARAMS } from './state/schema';
 import { encodeStateToken, decodeStateToken, tokenFromHash } from './state/share';
 import { loadUserPresets, saveUserPresets, nextPresetNumber } from './state/userPresets';
 import type { UserPreset } from './state/userPresets';
@@ -38,6 +38,9 @@ function onModChange(): void {
   if (engine.running) engine.setMod(mod);
   updateModIndicators(mod);
 }
+function fxControlId(param: string): string {
+  return `fx${param.charAt(0).toUpperCase()}${param.slice(1)}`;
+}
 function updateModIndicators(mod: ModState | undefined): void {
   const targets = new Set((mod?.routes ?? []).map((r) => `${r.formula}_${r.param}`));
   for (const f of FORMULAS) {
@@ -46,11 +49,16 @@ function updateModIndicators(mod: ModState | undefined): void {
       if (row) row.classList.toggle('modulated', targets.has(`${f.id}_${s.k}`));
     }
   }
+  // Индикатор ∿ и на FX-слайдерах панели эффектов (цель 'fx').
+  for (const param of FX_MOD_PARAMS) {
+    const row = document.getElementById(fxControlId(param))?.closest('.ctrl');
+    if (row) row.classList.toggle('modulated', targets.has(`fx_${param}`));
+  }
 }
 const modMatrix = new ModMatrix({
   host: el('modPanel'),
   formulas: FORMULAS,
-  lfoCount: 3,
+  lfoCount: 4,
   onChange: onModChange,
   isEnabled: (id) => {
     const e = document.getElementById(`en_${id}`);
@@ -524,7 +532,7 @@ for (const id of fxParamInputs) {
   el(id).addEventListener('input', () => {
     fxPresetSel.value = ''; // ручная правка любого FX → сбросить имя пресета
     updateFXLabels();
-    if (engine.running) engine.applyFxParams(readFxFromUI());
+    if (engine.running) engine.setBaseFx(readFxFromUI());
   });
 }
 

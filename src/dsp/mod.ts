@@ -13,11 +13,11 @@ export interface LfoDef {
 }
 
 export interface ModRoute {
-  src: number;        // индекс LFO в пуле
-  formula: FormulaId; // приёмник — какой генератор
-  param: string;      // ключ слайдера
-  depth: number;      // биполярно, доля диапазона [-1, 1]
-  exp?: boolean;      // экспоненциальный маппинг (для частот)
+  src: number;               // индекс LFO в пуле
+  formula: FormulaId | 'fx'; // приёмник: генератор ИЛИ 'fx' (модуль эффектов)
+  param: string;             // ключ слайдера генератора ИЛИ поля FxState
+  depth: number;             // биполярно, доля диапазона [-1, 1]
+  exp?: boolean;             // экспоненциальный маппинг (для частот)
 }
 
 export interface ModState {

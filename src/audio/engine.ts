@@ -12,9 +12,9 @@ import workletUrl from '../worklet/processors.ts?worker&url';
 import { FORMULAS } from '../formulas';
 import type { FxState } from '../state/schema';
 import type { Params } from '../dsp/generator';
-import type { ModState } from '../dsp/mod';
+import type { ModRoute, ModState } from '../dsp/mod';
 import { clampNum, filterMode, toBiquadType, vowelFormants } from './filters';
-import { buildModPayload } from './modrouting';
+import { buildModPayload, modulateFx } from './modrouting';
 import type { ModPayload } from './modrouting';
 
 export interface FormulaSetting {
@@ -35,6 +35,8 @@ interface FormulaNodes {
 }
 
 const GAIN_SMOOTH = 0.02; // с — сглаживание включения/выключения генератора
+const FX_MOD_INTERVAL_MS = 25; // ~40 Гц control-rate для LFO → FX (см. tickFxMod)
+const FX_SMOOTH_TC = 0.03;     // с — сглаживание модулируемых FX-параметров (setTargetAtTime)
 
 function makeImpulseResponse(ctx: AudioContext, seconds: number, decay: number): AudioBuffer {
   const sr = ctx.sampleRate;
@@ -104,6 +106,13 @@ export class AudioEngine {
   private nodes = new Map<string, FormulaNodes>();
 
   private modState: ModState | null = null;
+
+  // Модуляция FX (LFO → фильтр/эффекты) на главном потоке, control-rate.
+  // baseFx — «база» (значения слайдеров); таймер перекрывает промодулированные
+  // поля поверх неё. См. FX_MODULATION.md.
+  private baseFx: FxState | null = null;
+  private startTime = 0;
+  private fxModTimer: ReturnType<typeof setInterval> | null = null;
 
   get running(): boolean {
     return this.ctx !== null;
@@ -214,8 +223,9 @@ export class AudioEngine {
       outputChannelCount: [1],
     });
 
-    this.applyFx(state.fx);
+    this.startTime = ctx.currentTime;
     this.modState = state.mod ?? null;
+    this.applyFx(state.fx);
 
     // Генераторы
     for (const f of FORMULAS) {
@@ -247,6 +257,7 @@ export class AudioEngine {
   async stop(): Promise<void> {
     const ctx = this.ctx;
     if (!ctx) return;
+    this.stopFxModTimer();
     this.master.gain.setTargetAtTime(0, ctx.currentTime, 0.01);
     await new Promise((r) => setTimeout(r, 80));
     try { this.chorusLFO.stop(); } catch { /* уже остановлен */ }
@@ -262,11 +273,56 @@ export class AudioEngine {
     if (this.ctx) this.master.gain.value = v;
   }
 
-  /** Полное применение блока эффектов: роутинг + параметры. */
+  /** Полное применение блока эффектов: роутинг + параметры (+ mod-таймер). */
   applyFx(fx: FxState): void {
     if (!this.ctx) return;
+    this.baseFx = fx;
     this.applyRouting(fx);
-    this.applyFxParams(fx);
+    this.updateFxMod();
+  }
+
+  /** Обновить базу FX (значения слайдеров) без перестройки графа. Если есть
+   *  активные FX-маршруты — таймер сам наложит модуляцию поверх новой базы. */
+  setBaseFx(fx: FxState): void {
+    if (!this.ctx) return;
+    this.baseFx = fx;
+    this.updateFxMod();
+  }
+
+  private fxRoutes(): ModRoute[] {
+    return (this.modState?.routes ?? []).filter((r) => r.formula === 'fx');
+  }
+
+  private stopFxModTimer(): void {
+    if (this.fxModTimer !== null) {
+      clearInterval(this.fxModTimer);
+      this.fxModTimer = null;
+    }
+  }
+
+  // Запускает/гасит control-rate таймер по наличию FX-маршрутов; без них —
+  // один раз применяет базу (восстановление после снятия маршрута/пресета).
+  private updateFxMod(): void {
+    if (!this.ctx || !this.baseFx) return;
+    if (this.fxRoutes().length > 0) {
+      if (this.fxModTimer === null) {
+        this.fxModTimer = setInterval(() => this.tickFxMod(), FX_MOD_INTERVAL_MS);
+      }
+      this.tickFxMod(); // применить сразу, не ждать первого тика
+    } else {
+      this.stopFxModTimer();
+      this.applyFxParams(this.baseFx);
+    }
+  }
+
+  // Один такт FX-модуляции: собрать эффективный FxState (база + маршруты на
+  // момент t) и применить. Гварды applyFxParams не дают дорогой работы.
+  private tickFxMod(): void {
+    const ctx = this.ctx;
+    if (!ctx || !this.baseFx || !this.modState) return;
+    const t = ctx.currentTime - this.startTime;
+    const eff = modulateFx(this.baseFx, this.fxRoutes(), this.modState.lfos, t);
+    this.applyFxParams(eff);
   }
 
   private applyRouting(fx: FxState): void {
@@ -401,67 +457,85 @@ export class AudioEngine {
     if (!ctx) return;
     const now = ctx.currentTime;
 
+    // Когда работает FX-модулятор, значения приходят control-rate (~40 Гц):
+    // прямой setValueAtTime дал бы «лесенку» (зиппер), а скачки S&H по filterFreq/
+    // filterQ — щелчки, которые резонансная петля фейзера (feedback) звонко
+    // подчёркивает. Поэтому модулируемые параметры сглаживаем setTargetAtTime;
+    // без модуляции (правка слайдера/пресет) — мгновенный setValueAtTime.
+    const smooth = this.fxModTimer !== null;
+    const set = (p: AudioParam, v: number): void => {
+      if (smooth) p.setTargetAtTime(v, now, FX_SMOOTH_TC);
+      else p.setValueAtTime(v, now);
+    };
+
     const fmode = filterMode(fx.filterType);
     if (fmode === 'biquad') {
       this.filterNode.type = toBiquadType(fx.filterType);
-      this.filterNode.frequency.setValueAtTime(clampNum(fx.filterFreq, 20, 20000), now);
-      this.filterNode.Q.setValueAtTime(fx.filterQ, now);
-      this.filterNode.gain.setValueAtTime(fx.filterGain, now); // действует лишь для peaking/shelf
+      set(this.filterNode.frequency, clampNum(fx.filterFreq, 20, 20000));
+      set(this.filterNode.Q, fx.filterQ);
+      set(this.filterNode.gain, fx.filterGain); // действует лишь для peaking/shelf
     } else if (fmode === 'formant') {
       const { f, a } = vowelFormants(fx.filterVowel);
       const scale = clampNum(fx.filterFreq, 200, 4000) / 1000; // Freq как сдвиг формант
       const q = clampNum(fx.filterQ * 6, 4, 28);
       for (let i = 0; i < this.formantBands.length; i++) {
-        this.formantBands[i].frequency.setValueAtTime(clampNum(f[i] * scale, 50, 8000), now);
-        this.formantBands[i].Q.setValueAtTime(q, now);
-        this.formantGains[i].gain.setValueAtTime(a[i], now);
+        set(this.formantBands[i].frequency, clampNum(f[i] * scale, 50, 8000));
+        set(this.formantBands[i].Q, q);
+        set(this.formantGains[i].gain, a[i]);
       }
     } else {
       const freq = clampNum(fx.filterFreq, 20, 2000);
-      this.combDelay.delayTime.setValueAtTime(1 / freq, now);
-      this.combFb.gain.setValueAtTime(clampNum(fx.filterCombFb, 0, 0.95), now);
+      set(this.combDelay.delayTime, 1 / freq);
+      set(this.combFb.gain, clampNum(fx.filterCombFb, 0, 0.95));
     }
 
     const baseMs = fx.chorusMode === 'flanger' ? 2.0 : 12.0;
-    this.chorusDelay.delayTime.setValueAtTime(baseMs / 1000, now);
-    this.chorusLFO.frequency.setValueAtTime(fx.chorusRate, now);
-    this.chorusLFOGain.gain.setValueAtTime(fx.chorusDepth / 1000, now);
-    this.chorusDry.gain.setValueAtTime(1 - fx.chorusMix, now);
-    this.chorusWet.gain.setValueAtTime(fx.chorusMix, now);
-    this.chorusFb.gain.setValueAtTime(fx.chorusFb, now);
+    set(this.chorusDelay.delayTime, baseMs / 1000);
+    set(this.chorusLFO.frequency, fx.chorusRate);
+    set(this.chorusLFOGain.gain, fx.chorusDepth / 1000);
+    set(this.chorusDry.gain, 1 - fx.chorusMix);
+    set(this.chorusWet.gain, fx.chorusMix);
+    set(this.chorusFb.gain, fx.chorusFb);
 
-    this.reverbDry.gain.setValueAtTime(1 - fx.reverbMix, now);
-    this.reverbWet.gain.setValueAtTime(fx.reverbMix, now);
+    set(this.reverbDry.gain, 1 - fx.reverbMix);
+    set(this.reverbWet.gain, fx.reverbMix);
     if (fx.reverbDecay !== this.lastReverbDecay) {
       this.lastReverbDecay = fx.reverbDecay;
       const seconds = Math.min(6.0, Math.max(0.3, fx.reverbDecay * 1.4));
       this.reverbConv.buffer = makeImpulseResponse(ctx, seconds, fx.reverbDecay);
     }
 
-    this.limiter.threshold.setValueAtTime(fx.limiterThr, now);
+    set(this.limiter.threshold, fx.limiterThr);
     this.limiter.ratio.setValueAtTime(20, now);
     this.limiter.attack.setValueAtTime(0.003, now);
-    this.limiter.release.setValueAtTime(fx.limiterRel, now);
+    set(this.limiter.release, fx.limiterRel);
     this.limiter.knee.setValueAtTime(0, now);
 
-    this.delayNode.delayTime.setValueAtTime(fx.delayTime, now);
-    this.delayFb.gain.setValueAtTime(fx.delayFb, now);
-    this.delayDry.gain.setValueAtTime(1 - fx.delayMix, now);
-    this.delayWet.gain.setValueAtTime(fx.delayMix, now);
+    set(this.delayNode.delayTime, fx.delayTime);
+    set(this.delayFb.gain, fx.delayFb);
+    set(this.delayDry.gain, 1 - fx.delayMix);
+    set(this.delayWet.gain, fx.delayMix);
 
     // Смена числа звеньев требует пересборки цепочки
     const stages = Math.max(1, Math.min(this.phaserFilters.length, Math.floor(fx.phaserStages)));
     if (fx.phaserOn && stages !== this.phaserStagesConnected) {
       this.applyRouting(fx);
     }
-    this.phaserLFO.frequency.setValueAtTime(fx.phaserRate, now);
-    this.phaserFb.gain.setValueAtTime(fx.phaserFb, now);
-    this.phaserDry.gain.setValueAtTime(1 - fx.phaserMix, now);
-    this.phaserWet.gain.setValueAtTime(fx.phaserMix, now);
-    const freqRange = 3000 * fx.phaserDepth;
+    set(this.phaserLFO.frequency, fx.phaserRate);
+    set(this.phaserFb.gain, fx.phaserFb);
+    set(this.phaserDry.gain, 1 - fx.phaserMix);
+    set(this.phaserWet.gain, fx.phaserMix);
+    // Свип центра all-pass в СТРОГО положительном диапазоне [fLo, fHi]. База —
+    // центр, LFO раскачивает на полразмаха. Depth задаёт ширину. Раньше было
+    // center=1000 ± 3000·Depth: при Depth > ~0.33 частота уходила в минус, и
+    // каждое пересечение нуля давало щелчок (резонанс фейзера его подчёркивал).
+    const fLo = 200;
+    const fHi = fLo + 3600 * fx.phaserDepth; // Depth 1 → верх 3800 Гц
+    const pCenter = 0.5 * (fLo + fHi);
+    const pHalfSpan = 0.5 * (fHi - fLo);
     for (let i = 0; i < this.phaserFilters.length; i++) {
-      this.phaserFilters[i].frequency.setValueAtTime(1000, now);
-      this.phaserLFOGains[i].gain.setValueAtTime(freqRange, now);
+      this.phaserFilters[i].frequency.setValueAtTime(pCenter, now); // база звена постоянна
+      set(this.phaserLFOGains[i].gain, pHalfSpan);
     }
   }
 
@@ -504,6 +578,7 @@ export class AudioEngine {
     this.modState = mod ?? null;
     if (!this.ctx) return;
     for (const f of FORMULAS) this.pushMod(f.id);
+    this.updateFxMod(); // FX-маршруты живут на главном потоке, не в воркалете
   }
 
   /** Живое применение целого состояния (после загрузки пресета/URL). */

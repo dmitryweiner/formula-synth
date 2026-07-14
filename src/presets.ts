@@ -333,4 +333,140 @@ export const PRESETS: Preset[] = [
       },
     },
   },
+  // --- Демо модуляции FX (LFO → фильтр/эффекты) ---
+  {
+    // Всё дышит и плывёт: LFO гоняет cutoff фильтра на всю октавную ширину
+    // («вау»/свип), второй раскачивает скорость фейзера, третий — «дыхание»
+    // реверб-хвоста, а S&H ступенчато дёргает резонанс. Максимально «кислотная»
+    // витрина FX-модуляции — четыре LFO работают одновременно (только по FX,
+    // высота пада статична).
+    name: 'Psychedelic melt (FX mod)',
+    state: {
+      v: 3,
+      masterGain: 0.7,
+      fx: {
+        ...DEFAULT_FX,
+        filterOn: true, filterType: 'lowpass', filterFreq: 500, filterQ: 6,
+        phaserOn: true, phaserRate: 0.4, phaserDepth: 0.8, phaserStages: 6, phaserFb: 0.6, phaserMix: 0.6,
+        delayOn: true, delayTime: 0.4, delayFb: 0.5, delayMix: 0.35,
+        reverbOn: true, reverbDecay: 4.5, reverbMix: 0.4,
+        limiterOn: true,
+      },
+      formulas: {
+        additive: { enabled: true, params: { gain: 0.5, fund: 65, N: 18, move: 0.4 } },
+        fm: { enabled: true, params: { gain: 0.12, fc: 330, fm: 3, I: 5 } },
+      },
+      mod: {
+        lfos: [
+          { shape: 'sine', rate: 0.08, phase: 0 },
+          { shape: 'sine', rate: 0.2, phase: 0.25 },
+          { shape: 'triangle', rate: 0.05, phase: 0 },
+          { shape: 'random', rate: 0.15, phase: 0 },
+        ],
+        routes: [
+          { src: 0, formula: 'fx', param: 'filterFreq', depth: 0.85, exp: true },
+          { src: 1, formula: 'fx', param: 'phaserRate', depth: 0.6, exp: true },
+          { src: 2, formula: 'fx', param: 'reverbMix', depth: 0.4 },
+          { src: 3, formula: 'fx', param: 'filterQ', depth: 0.5 },
+        ],
+      },
+    },
+  },
+  {
+    // «Космический полёт»: бесконечно восходящий тон Шепарда (иллюзия вечного
+    // подъёма — сам «полёт») поверх низкого гармонического дрона и мерцающей FM.
+    // Вся FX-цепь дышит: сверхмедленный LFO гоняет cutoff на всю октавную ширину
+    // (пролёт сквозь туманности), треугольник тянет ВРЕМЯ дилея — эхо
+    // «варпит»/питчится по-доплеровски, третий LFO разгоняет свирл фейзера и
+    // раскрывает реверб-хвост (пространство то распахивается, то схлопывается),
+    // а S&H ступенчато дёргает резонанс и хвост эха. Психоделика, но не
+    // «кислотный размаз», а холодный дрейф в вакууме. Семь маршрутов, 4 LFO.
+    name: 'Space journey (FX mod)',
+    state: {
+      v: 3,
+      masterGain: 0.72,
+      fx: {
+        ...DEFAULT_FX,
+        filterOn: true, filterType: 'lowpass', filterFreq: 420, filterQ: 5,
+        chorusOn: true, chorusMode: 'chorus', chorusRate: 0.12, chorusDepth: 9, chorusMix: 0.4, chorusFb: 0.3,
+        phaserOn: true, phaserRate: 0.3, phaserDepth: 0.75, phaserStages: 8, phaserFb: 0.55, phaserMix: 0.55,
+        delayOn: true, delayTime: 0.6, delayFb: 0.45, delayMix: 0.4,
+        reverbOn: true, reverbDecay: 6.5, reverbMix: 0.45,
+        limiterOn: true,
+      },
+      formulas: {
+        additive: { enabled: true, params: { gain: 0.55, fund: 44, N: 24, move: 0.6 } },
+        shepard: { enabled: true, params: { gain: 0.22, shepBase: 40, shepSpeed: 0.06, shepOctaves: 7 } },
+        fm: { enabled: true, params: { gain: 0.16, fc: 110, fm: 1.5, I: 8 } },
+      },
+      mod: {
+        lfos: [
+          { shape: 'sine', rate: 0.05, phase: 0 },
+          { shape: 'triangle', rate: 0.037, phase: 0.5 },
+          { shape: 'sine', rate: 0.11, phase: 0.25 },
+          { shape: 'random', rate: 0.08, phase: 0 },
+        ],
+        routes: [
+          { src: 0, formula: 'fx', param: 'filterFreq', depth: 0.9, exp: true },
+          { src: 0, formula: 'fx', param: 'chorusDepth', depth: 0.4 },
+          { src: 1, formula: 'fx', param: 'delayTime', depth: 0.4, exp: true },
+          { src: 2, formula: 'fx', param: 'phaserRate', depth: 0.6, exp: true },
+          { src: 2, formula: 'fx', param: 'reverbMix', depth: 0.35 },
+          { src: 3, formula: 'fx', param: 'filterQ', depth: 0.5 },
+          { src: 3, formula: 'fx', param: 'delayFb', depth: 0.25 },
+        ],
+      },
+    },
+  },
+  {
+    // «Поливокс»: жирный тягучий дрон в духе советского аналога. Пила из
+    // суммы 30 гармоник на низком фундаменте + расстроенная пара (медленные
+    // биения = «два VCO») + tanh-сатурация (рык серого металлического ящика)
+    // + тихий brown noise (тёмный неровный гул — «шум блока питания»).
+    // Звезда — резонансный LP: сверхмедленный LFO тянет cutoff по низам,
+    // треугольник «дышит» резонансом (фирменный нестабильный фильтр).
+    // Частоты LFO взаимно иррациональны (0.019/0.031/0.047/0.029) — общий
+    // узор НЕ повторяется никогда, дрон вечно эволюционирует: дрейфует высота
+    // сатурированного голоса (dist.fd, ±⅓ октавы), плывёт скорость биений
+    // (beats.df), S&H раз в ~35 с ступенчато меняет злость сатурации, скорость
+    // движения гармоник и хвост эха. Всё ≤0.05 Гц — вязко и загадочно.
+    name: 'Polivoks drone (FX mod)',
+    state: {
+      v: 3,
+      masterGain: 0.72,
+      fx: {
+        ...DEFAULT_FX,
+        filterOn: true, filterType: 'lowpass', filterFreq: 300, filterQ: 8,
+        chorusOn: true, chorusMode: 'chorus', chorusRate: 0.05, chorusDepth: 12, chorusMix: 0.5, chorusFb: 0.35,
+        delayOn: true, delayTime: 1.3, delayFb: 0.5, delayMix: 0.35,
+        reverbOn: true, reverbDecay: 6.5, reverbMix: 0.4,
+        limiterOn: true,
+      },
+      formulas: {
+        additive: { enabled: true, params: { gain: 0.5, fund: 55, N: 30, move: 0.12 } },
+        beats: { enabled: true, params: { gain: 0.3, fbeat: 55, df: 0.7 } },
+        dist: { enabled: true, params: { gain: 0.14, fd: 110, alpha: 4 } },
+        brownnoise: { enabled: true, params: { gain: 0.05, brownStep: 0.008 } },
+      },
+      mod: {
+        lfos: [
+          { shape: 'sine', rate: 0.019, phase: 0 },
+          { shape: 'triangle', rate: 0.031, phase: 0.5 },
+          { shape: 'sine', rate: 0.047, phase: 0.25 },
+          { shape: 'random', rate: 0.029, phase: 0 },
+        ],
+        routes: [
+          { src: 0, formula: 'fx', param: 'filterFreq', depth: 0.8, exp: true },
+          { src: 1, formula: 'fx', param: 'filterQ', depth: 0.5 },
+          { src: 1, formula: 'beats', param: 'df', depth: 0.05 },
+          { src: 2, formula: 'fx', param: 'chorusDepth', depth: 0.4 },
+          { src: 2, formula: 'fx', param: 'reverbMix', depth: 0.35 },
+          { src: 2, formula: 'dist', param: 'fd', depth: 0.05, exp: true },
+          { src: 3, formula: 'dist', param: 'alpha', depth: 0.3 },
+          { src: 3, formula: 'additive', param: 'move', depth: 0.08 },
+          { src: 3, formula: 'fx', param: 'delayFb', depth: 0.2 },
+        ],
+      },
+    },
+  },
 ];
