@@ -645,4 +645,64 @@ export const PRESETS: Preset[] = [
       },
     },
   },
+  {
+    // «Фрактальный сад»: пресет, выращенный итерациями по спектрограмме
+    // (максимизация узорности/фрактальности водопада). Ключевой голос —
+    // логистическое отображение: сверхмедленный треугольник (период ~77 с)
+    // ведёт r через хаос и периодические окна — на водопаде каскады
+    // удвоения периода (буквально фрактал бифуркаций); второй маршрут дышит
+    // частотой обновления карты — узор сгущается/разрежается, как смена
+    // масштаба. Октавная сетка Шепарда (самоподобие по частоте), FM-веер,
+    // муар comb-гребёнки и эхо-решётка дилея — вложенные узоры на всех
+    // масштабах. Всё на решётке 55 Гц; logistic/shepard/quasi — фазовые
+    // аккумуляторы, модуляция без разрывов. Лента сплошная.
+    name: 'Fractal garden (FX mod)',
+    state: {
+      v: 3,
+      masterGain: 0.72,
+      fx: {
+        ...DEFAULT_FX,
+        filterOn: true, filterType: 'comb', filterFreq: 220, filterCombFb: 0.7,
+        chorusOn: true, chorusMode: 'chorus', chorusRate: 0.07, chorusDepth: 7, chorusMix: 0.25, chorusFb: 0.25,
+        phaserOn: true, phaserRate: 0.25, phaserDepth: 0.7, phaserStages: 8, phaserFb: 0.5, phaserMix: 0.45,
+        delayOn: true, delayTime: 0.66, delayFb: 0.5, delayMix: 0.3,
+        reverbOn: true, reverbDecay: 5.5, reverbMix: 0.25,
+        limiterOn: true,
+      },
+      formulas: {
+        additive: { enabled: true, params: { gain: 0.45, fund: 55, N: 24, move: 0.25 } },
+        beats: { enabled: true, params: { gain: 0.28, fbeat: 55, df: 0.6 } },
+        logistic: { enabled: true, params: { gain: 0.12, base: 330, depth: 500, r: 3.68, lfoHz: 16 } },
+        fm: { enabled: true, params: { gain: 0.15, fc: 880, fm: 55, I: 5 } },
+        shepard: { enabled: true, params: { gain: 0.1, shepBase: 55, shepSpeed: 0.05, shepOctaves: 8 } },
+      },
+      mod: {
+        lfos: [
+          { shape: 'sine', rate: 0.023, phase: 0 },
+          { shape: 'triangle', rate: 0.013, phase: 0.25 },
+          { shape: 'sine', rate: 0.089, phase: 0 },
+          { shape: 'random', rate: 0.031, phase: 0 },
+        ],
+        routes: [
+          // Муар: гребёнка скользит поперёк решётки гармоник.
+          { src: 0, formula: 'fx', param: 'filterFreq', depth: 0.3, exp: true },
+          { src: 0, formula: 'fx', param: 'reverbMix', depth: 0.25 },
+          // Бифуркации: r идёт сквозь окна хаоса; плотность узора «зумится».
+          { src: 1, formula: 'logistic', param: 'r', depth: 0.15 },
+          { src: 1, formula: 'logistic', param: 'lfoHz', depth: 0.2, exp: true },
+          // Хрусталь Шепарда накатывает волнами (~77 с) и растворяется в
+          // ноль — против монотонности; gain — множитель, треугольник
+          // непрерывен, щелчков нет.
+          { src: 1, formula: 'shepard', param: 'gain', depth: 0.1 },
+          // Средний масштаб: веер FM дышит, хорус утолщается.
+          { src: 2, formula: 'fm', param: 'I', depth: 0.35 },
+          { src: 2, formula: 'fx', param: 'chorusDepth', depth: 0.3 },
+          // S&H: регистр хаотического голоса, направление сетки Шепарда, эхо.
+          { src: 3, formula: 'logistic', param: 'base', depth: 0.1, exp: true },
+          { src: 3, formula: 'shepard', param: 'shepSpeed', depth: 0.12 },
+          { src: 3, formula: 'fx', param: 'delayFb', depth: 0.2 },
+        ],
+      },
+    },
+  },
 ];
